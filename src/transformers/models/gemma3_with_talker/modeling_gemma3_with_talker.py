@@ -48,11 +48,12 @@ from .configuration_gemma3_with_talker import (
     Gemma3Config,
     Gemma3DiTConfig,
     Gemma3TalkerConfig,
-    Gemma3TextConfig,
+    # Gemma3TextConfig,
     Gemma3ThinkerConfig,
     Gemma3Token2WavConfig,
     Gemma3WithTalkerConfig,
 )
+from ..gemma3 import Gemma3TextConfig
 
 
 if is_flash_attn_available():
@@ -67,7 +68,7 @@ if is_torch_flex_attn_available():
 logger = logging.get_logger(__name__)
 
 
-@auto_docstring
+# @auto_docstring
 class Gemma3WithTalkerPreTrainedModel(PreTrainedModel):
     config_class = Gemma3WithTalkerConfig
     base_model_prefix = ""
@@ -252,7 +253,7 @@ class Gemma3ThinkerMultiModalProjector(nn.Module):
         return projected_vision_outputs.type_as(vision_outputs)
 
 
-@auto_docstring
+# @auto_docstring
 class Gemma3ThinkerPreTrainedModel(PreTrainedModel):
     config_class = Gemma3ThinkerConfig
     base_model_prefix = ""
@@ -307,11 +308,11 @@ def token_type_ids_mask_function(
     return inner_mask
 
 
-@auto_docstring(
-    custom_intro="""
-    The Base Gemma3Thinker model which consists of a vision backbone and a language model withou language modeling head.,
-    """
-)
+# @auto_docstring(
+#     custom_intro="""
+#     The Base Gemma3Thinker model which consists of a vision backbone and a language model withou language modeling head.,
+#     """
+# )
 class Gemma3ThinkerModel(Gemma3ThinkerPreTrainedModel):
     _checkpoint_conversion_mapping = {"language_model.model": "language_model"}
 
@@ -350,7 +351,7 @@ class Gemma3ThinkerModel(Gemma3ThinkerPreTrainedModel):
         return image_features
 
     @can_return_tuple
-    @auto_docstring
+    # @auto_docstring
     def forward(
         self,
         input_ids: torch.LongTensor = None,
@@ -516,11 +517,11 @@ class Gemma3ThinkerModel(Gemma3ThinkerPreTrainedModel):
         )
 
 
-@auto_docstring(
-    custom_intro="""
-    The Base Gemma3Thinker model which consists of a vision backbone and a language model without language modeling head.,
-    """
-)
+# @auto_docstring(
+#     custom_intro="""
+#     The Base Gemma3Thinker model which consists of a vision backbone and a language model without language modeling head.,
+#     """
+# )
 class Gemma3ThinkerForConditionalGeneration(
     Gemma3ThinkerPreTrainedModel, GenerationMixin
 ):
@@ -565,7 +566,7 @@ class Gemma3ThinkerForConditionalGeneration(
     def multi_modal_projector(self):
         return self.model.multi_modal_projector
 
-    @auto_docstring
+    # @auto_docstring
     def forward(
         self,
         input_ids: torch.LongTensor = None,
@@ -839,7 +840,7 @@ class Qwen2RMSNorm(nn.Module):
         return f"{tuple(self.weight.shape)}, eps={self.variance_epsilon}"
 
 
-@auto_docstring
+# @auto_docstring
 class Gemma3PreTrainedModel(PreTrainedModel):
     config_class = Gemma3Config
     base_model_prefix = "model"
@@ -2062,7 +2063,7 @@ class Gemma3DecoderLayer(nn.Module):
         return outputs
 
 
-@auto_docstring
+# @auto_docstring
 class Gemma3TalkerModel(Gemma3PreTrainedModel):
     config_class = Gemma3TalkerConfig
     _no_split_modules = ["Gemma3TalkerDecoderLayer"]
@@ -2094,7 +2095,7 @@ class Gemma3TalkerModel(Gemma3PreTrainedModel):
     def set_input_embeddings(self, value):
         self.embed_tokens = value
 
-    @auto_docstring
+    # @auto_docstring
     def forward(
         self,
         input_ids: Optional[torch.LongTensor] = None,
@@ -2446,7 +2447,7 @@ class Gemma3TalkerForConditionalGeneration(
     def set_input_embeddings(self, value):
         self.model.set_input_embeddings(value)
 
-    @auto_docstring
+    # @auto_docstring
     def forward(
         self,
         input_ids: torch.LongTensor = None,
@@ -3608,11 +3609,11 @@ class AMPBlock(torch.nn.Module):
         return hidden_states
 
 
-@auto_docstring(
-    custom_intro="""
-    The full Qwen2.5Omni Token2WavBigVGAN model. Which take mel spectrogram as input and predict waveform.
-    """
-)
+# @auto_docstring(
+#     custom_intro="""
+#     The full Qwen2.5Omni Token2WavBigVGAN model. Which take mel spectrogram as input and predict waveform.
+#     """
+# )
 class Gemma3Token2WavBigVGANModel(Gemma3PreTrainedModel):
     config_class = Gemma3BigVGANConfig
 
@@ -3807,11 +3808,11 @@ class RungeKutta4ODESolver:
         return solution
 
 
-@auto_docstring(
-    custom_intro="""
-    The full Qwen2.5Omni Token2WavDiT model. Which take speech tokens as input and predict mel spectrogram.
-    """
-)
+# @auto_docstring(
+#     custom_intro="""
+#     The full Qwen2.5Omni Token2WavDiT model. Which take speech tokens as input and predict mel spectrogram.
+#     """
+# )
 class Gemma3Token2WavDiTModel(Gemma3PreTrainedModel):
     config_class = Gemma3DiTConfig
     _no_split_modules = ["DiTDecoderLayer"]
@@ -3989,11 +3990,11 @@ class Gemma3Token2WavDiTModel(Gemma3PreTrainedModel):
         return generated_mel_spectrogram
 
 
-@auto_docstring(
-    custom_intro="""
-    The full Qwen2.5Omni Token2Wav model. Consists a DiT model take speech tokens as input and predict mel spectrogram and a BigVGAN vocoder take mel spectrogram as input and predict waveform.
-    """
-)
+# @auto_docstring(
+#     custom_intro="""
+#     The full Qwen2.5Omni Token2Wav model. Consists a DiT model take speech tokens as input and predict mel spectrogram and a BigVGAN vocoder take mel spectrogram as input and predict waveform.
+#     """
+# )
 class Gemma3Token2WavModel(Gemma3PreTrainedModel):
     config_class = Gemma3Token2WavConfig
     base_model_prefix = "model"
@@ -4065,17 +4066,17 @@ class Gemma3WithTalkerAudioProjector(nn.Module):
         return self.input_proj_weight(input)
 
 
-@auto_docstring(
-    custom_intro="""
-    The full Gemma3 Talker model, a multimodal model composed of 3 sub-models:
-    - [`Gemma3ForConditionalGeneration`]:
-    a causal auto-regressive transformer takes text, image as input and predict text tokens.
-    - [`Gemma3TalkerForConditionalGeneration`]:
-    a causal auto-regressive transformer takes thinker hidden states and response as input and predict speech tokens.
-    - [`Gemma3Token2WavModel`]:
-    a DiT model take speech tokens as input and predict mel spectrogram and a BigVGAN vocoder take mel spectrogram as input and predict waveform.
-    """
-)
+# @auto_docstring(
+#     custom_intro="""
+#     The full Gemma3 Talker model, a multimodal model composed of 3 sub-models:
+#     - [`Gemma3ForConditionalGeneration`]:
+#     a causal auto-regressive transformer takes text, image as input and predict text tokens.
+#     - [`Gemma3TalkerForConditionalGeneration`]:
+#     a causal auto-regressive transformer takes thinker hidden states and response as input and predict speech tokens.
+#     - [`Gemma3Token2WavModel`]:
+#     a DiT model take speech tokens as input and predict mel spectrogram and a BigVGAN vocoder take mel spectrogram as input and predict waveform.
+#     """
+# )
 class Gemma3WithTalkerForConditionalGeneration(
     Gemma3WithTalkerPreTrainedModel, GenerationMixin
 ):
