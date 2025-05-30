@@ -5,7 +5,8 @@ from functools import partial
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 
-from ...utils import auto_docstring, can_return_tuple, is_torchdynamo_compiling, logging
+# from ...utils import auto_docstring, can_return_tuple, is_torchdynamo_compiling, logging
+
 from ..gemma3.configuration_gemma3 import Gemma3Config, Gemma3TextConfig
 from ..qwen2_5_omni.configuration_qwen2_5_omni import (
     Qwen2_5OmniTalkerConfig,
@@ -13,8 +14,12 @@ from ..qwen2_5_omni.configuration_qwen2_5_omni import (
     Qwen2_5OmniConfig,
 )
 from ...configuration_utils import PretrainedConfig
+
 from ..gemma3.modeling_gemma3 import (
     Gemma3PreTrainedModel,
+    Gemma3TextModel,
+    Gemma3ForCausalLM,
+    Gemma3Model,
     Gemma3ForConditionalGeneration,
     Gemma3CausalLMOutputWithPast,
 )
@@ -23,12 +28,18 @@ from ..qwen2_5_omni.modeling_qwen2_5_omni import (
     Qwen2_5OmniToken2WavModel,
     Qwen2_5OmniPreTrainedModel,
     Qwen2_5OmniTalkerCausalLMOutputWithPast,
+    Qwen2_5OmniPreTrainedModelForConditionalGeneration,
+    Qwen2_5OmniTalkerModel,
+    Qwen2_5OmniDecoderLayer,
+    QWEN2_5_OMNI_ATTENTION_CLASSES,
 )
 from ...modeling_utils import PreTrainedModel
 from ...modeling_outputs import BaseModelOutput, ModelOutput
 import torch
 import torch.nn as nn
-from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2RMSNorm
+
+# from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import Qwen2RMSNorm
+from ..qwen2_5_vl.modeling_qwen2_5_vl import Qwen2RMSNorm, Qwen2MLP
 from ...generation import GenerationMixin
 from ...utils import (
     auto_docstring,
@@ -36,6 +47,8 @@ from ...utils import (
     is_flash_attn_2_available,
     is_flash_attn_greater_or_equal_2_10,
     logging,
+    can_return_tuple,
+    is_torchdynamo_compiling,
 )
 from ...utils.hub import cached_file
 from loguru import logger as logger_v2
@@ -43,64 +56,75 @@ from loguru import logger as logger_v2
 logger = logging.get_logger(__name__)
 
 
-class Gemma3ThinkerConfig(Gemma3Config):
-    # model_type = "gemma3"
+# class Gemma3Config(Gemma3Config):
+#     pass
+
+
+# class Gemma3TextConfig(Gemma3TextConfig):
+#     pass
+
+
+class Gemma3WithTalkerThinkerTextConfig(Gemma3TextConfig):
+    model_type = "gemma3_with_talker_thinker_text"
     pass
 
 
-class Gemma3Config(Gemma3Config):
+class Gemma3WithTalkerThinkerConfig(Gemma3Config):
+    model_type = "gemma3_with_talker_thinker"
     pass
 
 
-class Gemma3TextConfig(Gemma3TextConfig):
+class Gemma3WithTalkerTalkerConfig(Qwen2_5OmniTalkerConfig):
+    model_type = "gemma3_with_talker_talker"
     pass
 
 
-class Gemma3TalkerConfig(Qwen2_5OmniTalkerConfig):
-    # model_type = "qwen2_5_omni_talker"
-    pass
-
-
-class Gemma3Token2WavConfig(Qwen2_5OmniToken2WavConfig):
-    # model_type = "qwen2_5_omni_token2wav"
+class Gemma3WithTalkerToken2WavConfig(Qwen2_5OmniToken2WavConfig):
+    model_type = "gemma3_with_talker_token2wav"
     pass
 
 
 class Gemma3WithTalkerConfig(PretrainedConfig):
     model_type = "gemma3_with_talker"
     sub_configs = {
-        "thinker_config": Gemma3ThinkerConfig,
-        "talker_config": Gemma3TalkerConfig,
-        "token2wav_config": Gemma3Token2WavConfig,
+        "thinker_config": Gemma3WithTalkerThinkerConfig,
+        "talker_config": Gemma3WithTalkerTalkerConfig,
+        "token2wav_config": Gemma3WithTalkerToken2WavConfig,
     }
 
     def __init__(
         self,
-        thinker_config: Optional[Union[Gemma3ThinkerConfig, Dict[str, Any]]] = None,
-        talker_config: Optional[Union[Gemma3TalkerConfig, Dict[str, Any]]] = None,
-        token2wav_config: Optional[Union[Gemma3Token2WavConfig, Dict[str, Any]]] = None,
+        thinker_config: Optional[
+            Union[Gemma3WithTalkerThinkerConfig, Dict[str, Any]]
+        ] = None,
+        talker_config: Optional[
+            Union[Gemma3WithTalkerTalkerConfig, Dict[str, Any]]
+        ] = None,
+        token2wav_config: Optional[
+            Union[Gemma3WithTalkerToken2WavConfig, Dict[str, Any]]
+        ] = None,
         enable_audio_output: bool = True,
         **kwargs,
     ):
         if thinker_config is None:
-            thinker_config = Gemma3ThinkerConfig()
+            thinker_config = Gemma3WithTalkerThinkerConfig()
             logger.info(
-                "thinker_config is None, using default Gemma3ThinkerConfig config."
+                "thinker_config is None, using default Gemma3WithTalkerThinkerConfig config."
             )
         elif isinstance(thinker_config, dict):
-            thinker_config = Gemma3ThinkerConfig(**thinker_config)
+            thinker_config = Gemma3WithTalkerThinkerConfig(**thinker_config)
 
         if isinstance(talker_config, dict):
-            talker_config = Gemma3TalkerConfig(**talker_config)
+            talker_config = Gemma3WithTalkerTalkerConfig(**talker_config)
         elif talker_config is None:
-            talker_config = Gemma3TalkerConfig()
+            talker_config = Gemma3WithTalkerTalkerConfig()
             logger.info(
                 "talker_config is None, using default Gemma3TalkerConfig config."
             )
         if isinstance(token2wav_config, dict):
-            token2wav_config = Gemma3Token2WavConfig(**token2wav_config)
+            token2wav_config = Gemma3WithTalkerToken2WavConfig(**token2wav_config)
         elif token2wav_config is None:
-            token2wav_config = Gemma3Token2WavConfig()
+            token2wav_config = Gemma3WithTalkerToken2WavConfig()
             logger.info(
                 "token2wav_config is None, using default Gemma3Token2WavConfig config."
             )
@@ -126,7 +150,7 @@ class Gemma3WithTalkerConfig(PretrainedConfig):
         return self.thinker_config.get_text_config()
 
 
-class Gemma3WithTalkerPreTrainedModel(Gemma3PreTrainedModel, PreTrainedModel):
+class Gemma3WithTalkerPreTrainedModel(Qwen2_5OmniPreTrainedModel, PreTrainedModel):
     config_class = Gemma3WithTalkerConfig
     _supports_static_cache = True
 
@@ -154,8 +178,12 @@ class Gemma3WithTalkerPreTrainedModel(Gemma3PreTrainedModel, PreTrainedModel):
             module.bias.data.zero_()
         elif isinstance(module, Qwen2RMSNorm):
             module.weight.data.fill_(1.0)
-        elif isinstance(module, Gemma3WithTalkerAudioProjector):
-            module.input_proj_weight.data.zero_()
+
+
+class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
+    Qwen2_5OmniPreTrainedModelForConditionalGeneration
+):
+    pass
 
 
 # class Gemma3WithTalkerModel(Gemma3WithTalkerPreTrainedModel):
@@ -169,9 +197,9 @@ class Gemma3WithTalkerPreTrainedModel(Gemma3PreTrainedModel, PreTrainedModel):
 ############################
 
 
-@dataclass
-class Gemma3ThinkerCausalLMOutputWithPast(Gemma3CausalLMOutputWithPast):
-    pass
+# @dataclass
+# class Gemma3CausalLMOutputWithPast(Gemma3CausalLMOutputWithPast):
+#     pass
 
 
 # @auto_docstring(
@@ -179,9 +207,28 @@ class Gemma3ThinkerCausalLMOutputWithPast(Gemma3CausalLMOutputWithPast):
 #     The Gemma3Thinker model which consists of a language model.
 #     """
 # )
-class Gemma3ThinkerForConditionalGeneration(
-    Gemma3ForConditionalGeneration, GenerationMixin
-):
+# class Gemma3ForConditionalGeneration(Gemma3ForConditionalGeneration, GenerationMixin):
+#     pass
+
+
+class Gemma3WithTalkerThinkerTextModel(Gemma3TextModel):
+    config_class = Gemma3WithTalkerThinkerTextConfig
+
+
+class Gemma3WithTalkerThinkerForCausalLM(Gemma3ForCausalLM):
+    config_class = Gemma3WithTalkerThinkerTextConfig
+    base_model_prefix = "language_model"
+
+    def __init__(self, config: Gemma3WithTalkerThinkerTextConfig):
+        super().__init__(config)
+        self.model = Gemma3WithTalkerThinkerTextModel(config)
+
+
+class Gemma3WithTalkerThinkerModel(Gemma3Model):
+    pass
+
+
+class Gemma3WithTalkerThinkerForConditionalGeneration(Gemma3ForConditionalGeneration):
     pass
 
 
@@ -191,15 +238,58 @@ class Gemma3ThinkerForConditionalGeneration(
 
 
 @dataclass
-class Gemma3TalkerCausalLMOutputWithPast(Qwen2_5OmniTalkerCausalLMOutputWithPast):
+class Gemma3WithTalkerTalkerCausalLMOutputWithPast(
+    Qwen2_5OmniTalkerCausalLMOutputWithPast
+):
     pass
 
 
-class Gemma3TalkerForConditionalGeneration(Qwen2_5OmniTalkerForConditionalGeneration):
+class Gemma3WithTalkerTalkerForConditionalGeneration(
+    Qwen2_5OmniTalkerForConditionalGeneration
+):
     pass
 
 
-class Gemma3Token2WavModel(Qwen2_5OmniToken2WavModel):
+class Gemma3WithTalkerTalkerDecoderLayer(Qwen2_5OmniDecoderLayer):
+    def __init__(self, config: Gemma3WithTalkerThinkerTextConfig, layer_idx: int):
+        super().__init__()
+        # self.hidden_size = config.hidden_size
+
+        # if (
+        #     config.use_sliding_window
+        #     and config._attn_implementation != "flash_attention_2"
+        # ):
+        #     logger.warning_once(
+        #         f"Sliding Window Attention is enabled but not implemented for `{config._attn_implementation}`; "
+        #         "unexpected results may be encountered."
+        #     )
+        # self.self_attn = QWEN2_5_OMNI_ATTENTION_CLASSES[config._attn_implementation](
+        #     config, layer_idx
+        # )
+
+        # self.mlp = Qwen2MLP(config)
+        # self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
+        # self.post_attention_layernorm = Qwen2RMSNorm(
+        #     config.hidden_size, eps=config.rms_norm_eps
+        # )
+
+
+class Gemma3WithTalkerTalkerModel(Qwen2_5OmniTalkerModel):
+    config_class = Gemma3WithTalkerTalkerConfig
+
+    def __init__(self, config: Gemma3WithTalkerTalkerConfig):
+        super().__init__(config)
+        # self.embed_tokens = nn.Embedding(config.vocab_size, config.embedding_size, self.padding_idx)
+        self.layers = nn.ModuleList(
+            [
+                Gemma3WithTalkerTalkerDecoderLayer(config, layer_idx)
+                for layer_idx in range(config.num_hidden_layers)
+            ]
+        )
+
+
+class Gemma3WithTalkerToken2WavModel(Qwen2_5OmniToken2WavModel):
+    config_class = Gemma3WithTalkerToken2WavConfig
     pass
 
 
@@ -208,31 +298,17 @@ class Gemma3Token2WavModel(Qwen2_5OmniToken2WavModel):
 ############################
 
 
-class Gemma3WithTalkerAudioProjector(nn.Module):
-    def __init__(self, config: Gemma3WithTalkerConfig) -> None:
-        super().__init__()
-        self.input_proj_weight = nn.Parameter(
-            torch.zeros(
-                config.thinker_config.text_config.hidden_size,
-                config.talker_config.embedding_size,
-            )
-        )
-
-    def forward(self, input: torch.Tensor):
-        return self.input_proj_weight(input)
-
-
-@auto_docstring(
-    custom_intro="""
-    The full Gemma3 Talker model, a multimodal model composed of 3 sub-models:
-    - [`Gemma3ForConditionalGeneration`]:
-    a causal auto-regressive transformer takes text, image as input and predict text tokens.
-    - [`Gemma3TalkerForConditionalGeneration`]:
-    a causal auto-regressive transformer takes thinker hidden states and response as input and predict speech tokens.
-    - [`Gemma3Token2WavModel`]:
-    a DiT model take speech tokens as input and predict mel spectrogram and a BigVGAN vocoder take mel spectrogram as input and predict waveform.
-    """
-)
+# @auto_docstring(
+#     custom_intro="""
+#     The full Gemma3 Talker model, a multimodal model composed of 3 sub-models:
+#     - [`Gemma3ForConditionalGeneration`]:
+#     a causal auto-regressive transformer takes text, image as input and predict text tokens.
+#     - [`Gemma3TalkerForConditionalGeneration`]:
+#     a causal auto-regressive transformer takes thinker hidden states and response as input and predict speech tokens.
+#     - [`Gemma3Token2WavModel`]:
+#     a DiT model take speech tokens as input and predict mel spectrogram and a BigVGAN vocoder take mel spectrogram as input and predict waveform.
+#     """
+# )
 class Gemma3WithTalkerForConditionalGeneration(
     Gemma3WithTalkerPreTrainedModel, GenerationMixin
 ):
@@ -242,7 +318,9 @@ class Gemma3WithTalkerForConditionalGeneration(
         super().__init__(config)
         logger.debug("Inside conditional generation and config is %s", config)
 
-        self.thinker = Gemma3ThinkerForConditionalGeneration(config.thinker_config)
+        self.thinker = Gemma3WithTalkerThinkerForConditionalGeneration(
+            config.thinker_config
+        )
 
         self.has_talker = config.enable_audio_output
         self.speaker_map = {}
@@ -269,8 +347,10 @@ class Gemma3WithTalkerForConditionalGeneration(
         self.post_init()
 
     def enable_talker(self):
-        self.talker = Gemma3TalkerForConditionalGeneration(self.config.talker_config)
-        self.token2wav = Gemma3Token2WavModel(self.config.token2wav_config)
+        self.talker = Gemma3WithTalkerTalkerForConditionalGeneration(
+            self.config.talker_config
+        )
+        self.token2wav = Gemma3WithTalkerToken2WavModel(self.config.token2wav_config)
         self.token2wav.float()
         self.has_talker = True
 
@@ -306,9 +386,9 @@ class Gemma3WithTalkerForConditionalGeneration(
         logger_v2.info(f"Inside from pretrained")
         logger_v2.debug(f"Config {config}")
         logger_v2.debug(f"Model args")
-        print(*model_args)
+        # print(*model_args)
         logger_v2.debug(f"kwargs")
-        print(**kwargs)
+        # print(**kwargs)
         model = super().from_pretrained(
             pretrained_model_name_or_path,
             *model_args,
@@ -643,15 +723,14 @@ class Gemma3WithTalkerForConditionalGeneration(
 
 
 __all__ = [
-    "Gemma3ThinkerConfig",
-    "Gemma3TalkerConfig",
-    "Gemma3Token2WavConfig",
+    "Gemma3WithTalkerTalkerConfig",
+    "Gemma3WithTalkerToken2WavConfig",
     "Gemma3WithTalkerConfig",
     "Gemma3WithTalkerPreTrainedModel",
-    "Gemma3ThinkerCausalLMOutputWithPast",
-    "Gemma3ThinkerForConditionalGeneration",
-    "Gemma3TalkerCausalLMOutputWithPast",
-    "Gemma3TalkerForConditionalGeneration",
-    "Gemma3Token2WavModel",
+    # "Gemma3CausalLMOutputWithPast",
+    # "Gemma3ForConditionalGeneration",
+    "Gemma3WithTalkerTalkerCausalLMOutputWithPast",
+    "Gemma3WithTalkerTalkerForConditionalGeneration",
+    "Gemma3WithTalkerToken2WavModel",
     "Gemma3WithTalkerForConditionalGeneration",
 ]

@@ -10,24 +10,23 @@ from ...configuration_utils import PretrainedConfig, layer_type_validation
 from ...modeling_rope_utils import rope_config_validation
 from ...utils import logging
 from ..siglip import SiglipVisionConfig
-from ..gemma3 import Gemma3TextConfig
 
 
 logger = logging.get_logger(__name__)
 
 
-class Gemma3WithTalkerTextConfig(PretrainedConfig):
+class Gemma3WithTalkerThinkerTextConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`Gemma3WithTalkerTextModel`]. It is used to instantiate an Gemma3WithTalkerText
+    This is the configuration class to store the configuration of a [`Gemma3WithTalkerThinkerTextModel`]. It is used to instantiate an Gemma3WithTalkerThinkerText
     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
-    defaults will yield a similar configuration to that of the Gemma3WithTalkerText-7B.
-    e.g. [google/gemma3_with_talker_text-7b](https://huggingface.co/google/gemma3_with_talker_text-7b)
+    defaults will yield a similar configuration to that of the Gemma3WithTalkerThinkerText-7B.
+    e.g. [google/gemma3_with_talker_thinker_text-7b](https://huggingface.co/google/gemma3_with_talker_thinker_text-7b)
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
     documentation from [`PretrainedConfig`] for more information.
     Args:
         vocab_size (`int`, *optional*, defaults to 262208):
-            Vocabulary size of the Gemma3WithTalkerText model. Defines the number of different tokens that can be represented by the
-            `inputs_ids` passed when calling [`Gemma3WithTalkerTextModel`]
+            Vocabulary size of the Gemma3WithTalkerThinkerText model. Defines the number of different tokens that can be represented by the
+            `inputs_ids` passed when calling [`Gemma3WithTalkerThinkerTextModel`]
         hidden_size (`int`, *optional*, defaults to 2304):
             Dimension of the hidden representations.
         intermediate_size (`int`, *optional*, defaults to 9216):
@@ -75,7 +74,7 @@ class Gemma3WithTalkerTextConfig(PretrainedConfig):
         query_pre_attn_scalar (`float`, *optional*, defaults to 256):
             Scaling factor used on the attention scores
         sliding_window (`int`, *optional*, defaults to 4096):
-            In Gemma3WithTalkerText, every other layer uses sliding window attention. This is the size of the sliding window.
+            In Gemma3WithTalkerThinkerText, every other layer uses sliding window attention. This is the size of the sliding window.
         layer_types (`list`, *optional*):
             Attention pattern for each layer.
         final_logit_softcapping (`float`, *optional*):
@@ -123,11 +122,11 @@ class Gemma3WithTalkerTextConfig(PretrainedConfig):
             The base period of the RoPE embeddings for local attention.
 
     ```python
-    >>> from transformers import Gemma3WithTalkerTextModel, Gemma3WithTalkerTextConfig
-    >>> # Initializing a Gemma3WithTalkerText gemma3_with_talker_text-7b style configuration
-    >>> configuration = Gemma3WithTalkerTextConfig()
-    >>> # Initializing a model from the gemma3_with_talker_text-7b style configuration
-    >>> model = Gemma3WithTalkerTextModel(configuration)
+    >>> from transformers import Gemma3WithTalkerThinkerTextModel, Gemma3WithTalkerThinkerTextConfig
+    >>> # Initializing a Gemma3WithTalkerThinkerText gemma3_with_talker_thinker_text-7b style configuration
+    >>> configuration = Gemma3WithTalkerThinkerTextConfig()
+    >>> # Initializing a model from the gemma3_with_talker_thinker_text-7b style configuration
+    >>> model = Gemma3WithTalkerThinkerTextModel(configuration)
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```
@@ -137,7 +136,7 @@ class Gemma3WithTalkerTextConfig(PretrainedConfig):
             Pattern for the sliding window attention.
     """
 
-    model_type = "gemma3_with_talker_text"
+    model_type = "gemma3_with_talker_thinker_text"
     keys_to_ignore_at_inference = ["past_key_values"]
     base_model_tp_plan = {
         "layers.*.self_attn.q_proj": "colwise",
@@ -156,7 +155,7 @@ class Gemma3WithTalkerTextConfig(PretrainedConfig):
 
     def __init__(
         self,
-        vocab_size=262_208,
+        vocab_size=262_145,
         hidden_size=2304,
         intermediate_size=9216,
         num_hidden_layers=26,
@@ -230,224 +229,10 @@ class Gemma3WithTalkerTextConfig(PretrainedConfig):
         layer_type_validation(self.layer_types)
 
 
-# class Gemma3TextConfig(PretrainedConfig):
-#     r"""
-#     This is the configuration class to store the configuration of a [`Gemma3TextModel`]. It is used to instantiate an Gemma3Text
-#     model according to the specified arguments, defining the model architecture. Instantiating a configuration with the
-#     defaults will yield a similar configuration to that of the Gemma3Text-7B.
-#     e.g. [google/gemma3_text-7b](https://huggingface.co/google/gemma3_text-7b)
-#     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
-#     documentation from [`PretrainedConfig`] for more information.
-#     Args:
-#         vocab_size (`int`, *optional*, defaults to 262208):
-#             Vocabulary size of the Gemma3Text model. Defines the number of different tokens that can be represented by the
-#             `inputs_ids` passed when calling [`Gemma3TextModel`]
-#         hidden_size (`int`, *optional*, defaults to 2304):
-#             Dimension of the hidden representations.
-#         intermediate_size (`int`, *optional*, defaults to 9216):
-#             Dimension of the MLP representations.
-#         num_hidden_layers (`int`, *optional*, defaults to 26):
-#             Number of hidden layers in the Transformer decoder.
-#         num_attention_heads (`int`, *optional*, defaults to 8):
-#             Number of attention heads for each attention layer in the Transformer decoder.
-#         num_key_value_heads (`int`, *optional*, defaults to 4):
-#             This is the number of key_value heads that should be used to implement Grouped Query Attention. If
-#             `num_key_value_heads=num_attention_heads`, the model will use Multi Head Attention (MHA), if
-#             `num_key_value_heads=1` the model will use Multi Query Attention (MQA) otherwise GQA is used. When
-#             converting a multi-head checkpoint to a GQA checkpoint, each group key and value head should be constructed
-#             by meanpooling all the original heads within that group. For more details checkout [this
-#             paper](https://arxiv.org/pdf/2305.13245.pdf). If it is not specified, will default to
-#             `num_attention_heads`.
-#         head_dim (`int`, *optional*, defaults to 256):
-#             The attention head dimension.
-#         hidden_activation (`str` or `function`, *optional*, defaults to `"gelu_pytorch_tanh"`):
-#             The non-linear activation function (function or string) in the decoder. Will default to `"gelu_pytorch_tanh"`
-#             if not specified. `"gelu_pytorch_tanh"` uses an approximation of the `"gelu"` activation function.
-#         max_position_embeddings (`int`, *optional*, defaults to 131072):
-#             The maximum sequence length that this model might ever be used with.
-#         initializer_range (`float`, *optional*, defaults to 0.02):
-#             The standard deviation of the truncated_normal_initializer for initializing all weight matrices.
-#         rms_norm_eps (`float`, *optional*, defaults to 1e-06):
-#             The epsilon used by the rms normalization layers.
-#         use_cache (`bool`, *optional*, defaults to `True`):
-#             Whether or not the model should return the last key/values attentions (not used by all models). Only
-#             relevant if `config.is_decoder=True`.
-#         pad_token_id (`int`, *optional*, defaults to 0):
-#             Padding token id.
-#         eos_token_id (`int`, *optional*, defaults to 1):
-#             End of stream token id.
-#         bos_token_id (`int`, *optional*, defaults to 2):
-#             Beginning of stream token id.
-#         tie_word_embeddings (`bool`, *optional*, defaults to `True`):
-#             Whether to tie weight embeddings
-#         rope_theta (`float`, *optional*, defaults to 1000000.0):
-#             The base period of the RoPE embeddings.
-#         attention_bias (`bool`, defaults to `False`, *optional*, defaults to `False`):
-#             Whether to use a bias in the query, key, value and output projection layers during self-attention.
-#         attention_dropout (`float`, *optional*, defaults to 0.0):
-#             The dropout ratio for the attention probabilities.
-#         query_pre_attn_scalar (`float`, *optional*, defaults to 256):
-#             Scaling factor used on the attention scores
-#         sliding_window (`int`, *optional*, defaults to 4096):
-#             In Gemma3Text, every other layer uses sliding window attention. This is the size of the sliding window.
-#         layer_types (`list`, *optional*):
-#             Attention pattern for each layer.
-#         final_logit_softcapping (`float`, *optional*):
-#             Scaling factor when applying tanh softcapping on the logits.
-#         attn_logit_softcapping (`float`, *optional*):
-#             Scaling factor when applying tanh softcapping on the attention scores.
-#         rope_scaling (`Dict`, *optional*):
-#             Dictionary containing the scaling configuration for the RoPE embeddings used in global attention. NOTE: if you apply new rope type
-#             and you expect the model to work on longer `max_position_embeddings`, we recommend you to update this value
-#             accordingly.
-#             Expected contents:
-#                 `rope_type` (`str`):
-#                     The sub-variant of RoPE to use. Can be one of ['default', 'linear', 'dynamic', 'yarn', 'longrope',
-#                     'llama3'], with 'default' being the original RoPE implementation.
-#                 `factor` (`float`, *optional*):
-#                     Used with all rope types except 'default'. The scaling factor to apply to the RoPE embeddings. In
-#                     most scaling types, a `factor` of x will enable the model to handle sequences of length x *
-#                     original maximum pre-trained length.
-#                 `original_max_position_embeddings` (`int`, *optional*):
-#                     Used with 'dynamic', 'longrope' and 'llama3'. The original max position embeddings used during
-#                     pretraining.
-#                 `attention_factor` (`float`, *optional*):
-#                     Used with 'yarn' and 'longrope'. The scaling factor to be applied on the attention
-#                     computation. If unspecified, it defaults to value recommended by the implementation, using the
-#                     `factor` field to infer the suggested value.
-#                 `beta_fast` (`float`, *optional*):
-#                     Only used with 'yarn'. Parameter to set the boundary for extrapolation (only) in the linear
-#                     ramp function. If unspecified, it defaults to 32.
-#                 `beta_slow` (`float`, *optional*):
-#                     Only used with 'yarn'. Parameter to set the boundary for interpolation (only) in the linear
-#                     ramp function. If unspecified, it defaults to 1.
-#                 `short_factor` (`List[float]`, *optional*):
-#                     Only used with 'longrope'. The scaling factor to be applied to short contexts (<
-#                     `original_max_position_embeddings`). Must be a list of numbers with the same length as the hidden
-#                     size divided by the number of attention heads divided by 2
-#                 `long_factor` (`List[float]`, *optional*):
-#                     Only used with 'longrope'. The scaling factor to be applied to long contexts (<
-#                     `original_max_position_embeddings`). Must be a list of numbers with the same length as the hidden
-#                     size divided by the number of attention heads divided by 2
-#                 `low_freq_factor` (`float`, *optional*):
-#                     Only used with 'llama3'. Scaling factor applied to low frequency components of the RoPE
-#                 `high_freq_factor` (`float`, *optional*):
-#                     Only used with 'llama3'. Scaling factor applied to high frequency components of the RoPE
-#         rope_local_base_freq (float, *optional*, defaults to 10000.0):
-#             The base period of the RoPE embeddings for local attention.
-
-#     ```python
-#     >>> from transformers import Gemma3TextModel, Gemma3TextConfig
-#     >>> # Initializing a Gemma3Text gemma3_text-7b style configuration
-#     >>> configuration = Gemma3TextConfig()
-#     >>> # Initializing a model from the gemma3_text-7b style configuration
-#     >>> model = Gemma3TextModel(configuration)
-#     >>> # Accessing the model configuration
-#     >>> configuration = model.config
-#     ```
-#         rope_local_base_freq (float, *optional*, defaults to 10000.0):
-#             The base period of the RoPE embeddings for local attention.
-#         sliding_window_pattern (`int`, *optional*, defaults to 6):
-#             Pattern for the sliding window attention.
-#     """
-
-#     model_type = "gemma3_text"
-#     keys_to_ignore_at_inference = ["past_key_values"]
-#     base_model_tp_plan = {
-#         "layers.*.self_attn.q_proj": "colwise",
-#         "layers.*.self_attn.k_proj": "colwise",
-#         "layers.*.self_attn.v_proj": "colwise",
-#         "layers.*.self_attn.o_proj": "rowwise",
-#         "layers.*.mlp.gate_proj": "colwise",
-#         "layers.*.mlp.up_proj": "colwise",
-#         "layers.*.mlp.down_proj": "rowwise",
-#     }
-#     base_model_pp_plan = {
-#         "embed_tokens": (["input_ids"], ["inputs_embeds"]),
-#         "layers": (["hidden_states", "attention_mask"], ["hidden_states"]),
-#         "norm": (["hidden_states"], ["hidden_states"]),
-#     }
-
-#     def __init__(
-#         self,
-#         vocab_size=262_208,
-#         hidden_size=2304,
-#         intermediate_size=9216,
-#         num_hidden_layers=26,
-#         num_attention_heads=8,
-#         num_key_value_heads=4,
-#         head_dim=256,
-#         hidden_activation="gelu_pytorch_tanh",
-#         max_position_embeddings=131_072,
-#         initializer_range=0.02,
-#         rms_norm_eps=1e-6,
-#         use_cache=True,
-#         pad_token_id=0,
-#         eos_token_id=1,
-#         bos_token_id=2,
-#         tie_word_embeddings=True,
-#         rope_theta=1_000_000.0,
-#         attention_bias=False,
-#         attention_dropout=0.0,
-#         query_pre_attn_scalar=256,
-#         sliding_window=4096,
-#         layer_types=None,
-#         final_logit_softcapping=None,
-#         attn_logit_softcapping=None,
-#         rope_scaling=None,
-#         rope_local_base_freq=10_000.0,
-#         **kwargs,
-#     ):
-#         super().__init__(
-#             pad_token_id=pad_token_id,
-#             bos_token_id=bos_token_id,
-#             eos_token_id=eos_token_id,
-#             tie_word_embeddings=tie_word_embeddings,
-#             **kwargs,
-#         )
-#         self.vocab_size = vocab_size
-#         self.max_position_embeddings = max_position_embeddings
-#         self.hidden_size = hidden_size
-#         self.intermediate_size = intermediate_size
-#         self.num_hidden_layers = num_hidden_layers
-#         self.num_attention_heads = num_attention_heads
-#         self.head_dim = head_dim
-#         self.num_key_value_heads = num_key_value_heads
-#         self.initializer_range = initializer_range
-#         self.rms_norm_eps = rms_norm_eps
-#         self.use_cache = use_cache
-#         self.rope_theta = rope_theta
-#         self.attention_bias = attention_bias
-#         self.attention_dropout = attention_dropout
-#         self.hidden_activation = hidden_activation
-#         self.query_pre_attn_scalar = query_pre_attn_scalar
-#         self.sliding_window = sliding_window
-#         self.final_logit_softcapping = final_logit_softcapping
-#         self.attn_logit_softcapping = attn_logit_softcapping
-#         self.layer_types = layer_types
-
-#         self.rope_local_base_freq = rope_local_base_freq
-#         self.rope_scaling = rope_scaling
-#         rope_config_validation(self)
-
-#         if self.layer_types is None:
-#             # BC -> the pattern used to be a simple int, and it's still present in configs on the Hub
-#             sliding_window_pattern = getattr(self, "sliding_window_pattern", 6)
-#             self.layer_types = [
-#                 (
-#                     "sliding_attention"
-#                     if bool((i + 1) % sliding_window_pattern)
-#                     else "full_attention"
-#                 )
-#                 for i in range(self.num_hidden_layers)
-#             ]
-#         layer_type_validation(self.layer_types)
-
-
-class Gemma3ThinkerConfig(PretrainedConfig):
+class Gemma3WithTalkerThinkerConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`Gemma3ThinkerForConditionalGeneration`]. It is used to instantiate an
-    Gemma3ThinkerForConditionalGeneration according to the specified arguments, defining the model architecture. Instantiating a configuration
+    This is the configuration class to store the configuration of a [`Gemma3WithTalkerThinkerForConditionalGeneration`]. It is used to instantiate an
+    Gemma3WithTalkerThinkerForConditionalGeneration according to the specified arguments, defining the model architecture. Instantiating a configuration
     with the defaults will yield a similar configuration to that of the PaliGemma-2B.
 
     e.g. [google/gemma-3-4b](https://huggingface.co/google/gemma-3-4b)
@@ -456,7 +241,7 @@ class Gemma3ThinkerConfig(PretrainedConfig):
     documentation from [`PretrainedConfig`] for more information.
 
     Args:
-        text_config (`Union[Gemma3ThinkerTextConfig, dict]`, *optional*):
+        text_config (`Union[Gemma3WithTalkerThinkerTextConfig, dict]`, *optional*):
             The config object of the text backbone.
         vision_config (`Union[AutoConfig, dict]`,  *optional*):
             Custom vision config or dict.
@@ -475,38 +260,40 @@ class Gemma3ThinkerConfig(PretrainedConfig):
     Example:
 
     ```python
-    >>> from transformers import Gemma3ThinkerForConditionalGeneration, Gemma3ThinkerConfig, SiglipVisionConfig, Gemma3ThinkerTextConfig
+    >>> from transformers import Gemma3WithTalkerThinkerForConditionalGeneration, Gemma3WithTalkerThinkerConfig, SiglipVisionConfig, Gemma3WithTalkerThinkerTextConfig
 
     >>> # Initializing a Siglip-like vision config
     >>> vision_config = SiglipVisionConfig()
 
-    >>> # Initializing a Gemma3Thinker Text config
-    >>> text_config = Gemma3ThinkerTextConfig()
+    >>> # Initializing a Gemma3WithTalkerThinker Text config
+    >>> text_config = Gemma3WithTalkerThinkerTextConfig()
 
-    >>> # Initializing a Gemma3Thinker gemma-3-4b style configuration
-    >>> configuration = Gemma3ThinkerConfig(vision_config, text_config)
+    >>> # Initializing a Gemma3WithTalkerThinker gemma-3-4b style configuration
+    >>> configuration = Gemma3WithTalkerThinkerConfig(vision_config, text_config)
 
     >>> # Initializing a model from the gemma-3-4b style configuration
-    >>> model = Gemma3ThinkerTextConfig(configuration)
+    >>> model = Gemma3WithTalkerThinkerTextConfig(configuration)
 
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
 
-    model_type = "gemma3_thinker"
+    model_type = "gemma3_with_talker_thinker"
     attribute_map = {
         "image_token_id": "image_token_index",
         "boi_token_id": "boi_token_index",
         "eoi_token_id": "eoi_token_index",
     }
     sub_configs = {
-        "text_config": Gemma3TextConfig,
+        "text_config": Gemma3WithTalkerThinkerTextConfig,
         "vision_config": SiglipVisionConfig,
     }
 
     def __init__(
         self,
-        text_config: Optional[Union[Gemma3TextConfig, Dict[str, Any]]] = None,
+        text_config: Optional[
+            Union[Gemma3WithTalkerThinkerTextConfig, Dict[str, Any]]
+        ] = None,
         vision_config: Optional[Union[SiglipVisionConfig, Dict[str, Any]]] = None,
         mm_tokens_per_image: int = 256,
         boi_token_index: int = 255_999,
@@ -516,12 +303,12 @@ class Gemma3ThinkerConfig(PretrainedConfig):
         **kwargs,
     ):
         if text_config is None:
-            text_config = Gemma3TextConfig()
+            text_config = Gemma3WithTalkerThinkerTextConfig()
             logger.info(
-                "text_config is None, using default Gemma3ThinkerTextConfig text config."
+                "text_config is None, using default Gemma3WithTalkerThinkerTextConfig text config."
             )
         elif isinstance(text_config, dict):
-            text_config = Gemma3TextConfig(**text_config)
+            text_config = Gemma3WithTalkerThinkerTextConfig(**text_config)
 
         if isinstance(vision_config, dict):
             vision_config = SiglipVisionConfig(**vision_config)
@@ -542,107 +329,9 @@ class Gemma3ThinkerConfig(PretrainedConfig):
         super().__init__(**kwargs)
 
 
-class Gemma3Config(PretrainedConfig):
+class Gemma3WithTalkerTalkerConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`Gemma3ForConditionalGeneration`]. It is used to instantiate an
-    Gemma3ForConditionalGeneration according to the specified arguments, defining the model architecture. Instantiating a configuration
-    with the defaults will yield a similar configuration to that of the PaliGemma-2B.
-
-    e.g. [google/gemma-3-4b](https://huggingface.co/google/gemma-3-4b)
-
-    Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
-    documentation from [`PretrainedConfig`] for more information.
-
-    Args:
-        text_config (`Union[Gemma3TextConfig, dict]`, *optional*):
-            The config object of the text backbone.
-        vision_config (`Union[AutoConfig, dict]`,  *optional*):
-            Custom vision config or dict.
-        mm_tokens_per_image (`int`, *optional*, defaults to 256):
-            The number of tokens per image embedding.
-        boi_token_index (`int`, *optional*, defaults to 255999):
-            The begin-of-image token index to wrap the image prompt.
-        eoi_token_index (`int`, *optional*, defaults to 256000):
-            The end-of-image token index to wrap the image prompt.
-        image_token_index (`int`, *optional*, defaults to 262144):
-            The image token index to encode the image prompt.
-        initializer_range (`float`, *optional*, defaults to 0.02):
-            The standard deviation of the truncated_normal_initializer for initializing all weight matrices.
-
-
-    Example:
-
-    ```python
-    >>> from transformers import Gemma3ForConditionalGeneration, Gemma3Config, SiglipVisionConfig, Gemma3TextConfig
-
-    >>> # Initializing a Siglip-like vision config
-    >>> vision_config = SiglipVisionConfig()
-
-    >>> # Initializing a Gemma3 Text config
-    >>> text_config = Gemma3TextConfig()
-
-    >>> # Initializing a Gemma3 gemma-3-4b style configuration
-    >>> configuration = Gemma3Config(vision_config, text_config)
-
-    >>> # Initializing a model from the gemma-3-4b style configuration
-    >>> model = Gemma3TextConfig(configuration)
-
-    >>> # Accessing the model configuration
-    >>> configuration = model.config
-    ```"""
-
-    model_type = "gemma3"
-    attribute_map = {
-        "image_token_id": "image_token_index",
-        "boi_token_id": "boi_token_index",
-        "eoi_token_id": "eoi_token_index",
-    }
-    sub_configs = {
-        "text_config": Gemma3TextConfig,
-        "vision_config": SiglipVisionConfig,
-    }
-
-    def __init__(
-        self,
-        text_config: Optional[Union[Gemma3TextConfig, Dict[str, Any]]] = None,
-        vision_config: Optional[Union[SiglipVisionConfig, Dict[str, Any]]] = None,
-        mm_tokens_per_image: int = 256,
-        boi_token_index: int = 255_999,
-        eoi_token_index: int = 256_000,
-        image_token_index: int = 262_144,
-        initializer_range: float = 0.02,
-        **kwargs,
-    ):
-        if text_config is None:
-            text_config = Gemma3TextConfig()
-            logger.info(
-                "text_config is None, using default Gemma3TextConfig text config."
-            )
-        elif isinstance(text_config, dict):
-            text_config = Gemma3TextConfig(**text_config)
-
-        if isinstance(vision_config, dict):
-            vision_config = SiglipVisionConfig(**vision_config)
-        elif vision_config is None:
-            vision_config = SiglipVisionConfig()
-            logger.info(
-                "vision_config is None, using default SiglipVisionConfig vision config."
-            )
-
-        self.text_config = text_config
-        self.vision_config = vision_config
-        self.mm_tokens_per_image = mm_tokens_per_image
-        self.boi_token_index = boi_token_index
-        self.eoi_token_index = eoi_token_index
-        self.image_token_index = image_token_index
-        self.initializer_range = initializer_range
-
-        super().__init__(**kwargs)
-
-
-class Gemma3TalkerConfig(PretrainedConfig):
-    r"""
-    This is the configuration class to store the configuration of a [`Gemma3TalkerForConditionalGeneration`]. It is used to instantiate an
+    This is the configuration class to store the configuration of a [`Gemma3WithTalkerTalkerForConditionalGeneration`]. It is used to instantiate an
     Qwen2.5-Omni-Talker model according to the specified arguments, defining the model architecture. Instantiating a configuration
     with the defaults will yield a similar configuration to that of the Qwen2.5-Omni-Thinker.
 
@@ -772,25 +461,25 @@ class Gemma3TalkerConfig(PretrainedConfig):
     Example:
 
     ```python
-    >>> from transformers import Gemma3TalkerForConditionalGeneration, Gemma3ThinkerConfig, Gemma3AudioEncoderConfig, Gemma3VisionEncoderConfig
+    >>> from transformers import Gemma3WithTalkerTalkerForConditionalGeneration, Gemma3WithTalkerThinkerConfig, Gemma3WithTalkerAudioEncoderConfig, Gemma3WithTalkerVisionEncoderConfig
 
-    >>> # Initializing a Gemma3AudioEncoder config
-    >>> audio_config = Gemma3AudioEncoderConfig()
+    >>> # Initializing a Gemma3WithTalkerAudioEncoder config
+    >>> audio_config = Gemma3WithTalkerAudioEncoderConfig()
 
     >>> # Initializing a Qwen2 config
     >>> text_config = Qwen2Config()
 
-    >>> # Initializing a Gemma3 configuration
-    >>> configuration = Gemma3ThinkerConfig(audio_config, text_config)
+    >>> # Initializing a Gemma3WithTalker configuration
+    >>> configuration = Gemma3WithTalkerThinkerConfig(audio_config, text_config)
 
     >>> # Initializing a model from the qwen2-audio style configuration
-    >>> model = Gemma3TalkerForConditionalGeneration(configuration)
+    >>> model = Gemma3WithTalkerTalkerForConditionalGeneration(configuration)
 
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```"""
 
-    model_type = "gemma3_talker"
+    model_type = "gemma3_with_talker_talker"
     attribute_map = {
         "image_token_id": "image_token_index",
         "video_token_id": "video_token_index",
@@ -888,9 +577,9 @@ class Gemma3TalkerConfig(PretrainedConfig):
         super().__init__(tie_word_embeddings=tie_word_embeddings, **kwargs)
 
 
-class Gemma3DiTConfig(PretrainedConfig):
+class Gemma3WithTalkerDiTConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of the Gemma3Token2WavDiT used in the Qwen2.5-Omni-Token2Wav model.
+    This is the configuration class to store the configuration of the Gemma3WithTalkerToken2WavDiT used in the Qwen2.5-Omni-Token2Wav model.
     It defines the architecture of the DiT model, which is used for generating mel-spectrograms from tokens.
 
     Args:
@@ -933,7 +622,7 @@ class Gemma3DiTConfig(PretrainedConfig):
             The number of output channels after squeeze in the SqueezeExcitationBlock.
     """
 
-    model_type = "gemma3_dit"
+    model_type = "gemma3_with_talker_dit"
 
     def __init__(
         self,
@@ -988,9 +677,9 @@ class Gemma3DiTConfig(PretrainedConfig):
         super().__init__(**kwargs)
 
 
-class Gemma3BigVGANConfig(PretrainedConfig):
+class Gemma3WithTalkerBigVGANConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of the Gemma3Token2WavBigVGAN module used in the Qwen2.5-Omni-Token2Wav model.
+    This is the configuration class to store the configuration of the Gemma3WithTalkerToken2WavBigVGAN module used in the Qwen2.5-Omni-Token2Wav model.
     It defines the architecture of the BigVGAN model, which is used for converting mel-spectrograms to waveforms.
 
     Args:
@@ -1008,7 +697,7 @@ class Gemma3BigVGANConfig(PretrainedConfig):
             A list of kernel sizes for each upsampling layer.
     """
 
-    model_type = "gemma3_bigvgan"
+    model_type = "gemma3_with_talker_bigvgan"
 
     def __init__(
         self,
@@ -1029,9 +718,9 @@ class Gemma3BigVGANConfig(PretrainedConfig):
         super().__init__(**kwargs)
 
 
-class Gemma3Token2WavConfig(PretrainedConfig):
+class Gemma3WithTalkerToken2WavConfig(PretrainedConfig):
     r"""
-    This is the configuration class to store the configuration of a [`Gemma3Token2WavModel`].
+    This is the configuration class to store the configuration of a [`Gemma3WithTalkerToken2WavModel`].
     It is used to instantiate the Qwen2.5-Omni-Token2Wav model which combines a Diffusion Transformer (DiT) for mel-spectrogram generation with a BigVGAN model for waveform synthesis. The configuration contains sub-configurations for both components.
 
     Configuration objects inherit from [`PretrainedConfig`] and can be used to control the model outputs. Read the
@@ -1045,7 +734,7 @@ class Gemma3Token2WavConfig(PretrainedConfig):
     Example:
 
     ```python
-    >>> from transformers import Gemma3Token2WavModel, DiT_Args, BigVGAN_Args
+    >>> from transformers import Gemma3WithTalkerToken2WavModel, DiT_Args, BigVGAN_Args
 
     >>> # Initialize DiT configuration
     >>> dit_config = DiT_Args(
@@ -1062,20 +751,20 @@ class Gemma3Token2WavConfig(PretrainedConfig):
     ... )
 
     >>> # Initialize main configuration
-    >>> config = Gemma3Token2WavConfig(dit_config, bigvgan_config)
+    >>> config = Gemma3WithTalkerToken2WavConfig(dit_config, bigvgan_config)
 
     >>> # Initialize model with config
-    >>> model = Gemma3Token2Wav(config)
+    >>> model = Gemma3WithTalkerToken2Wav(config)
 
     >>> # Accessing the model configuration
     >>> configuration = model.config
     ```
     """
 
-    model_type = "gemma3_token2wav"
+    model_type = "gemma3_with_talker_token2wav"
     sub_configs = {
-        "dit_config": Gemma3DiTConfig,
-        "bigvgan_config": Gemma3BigVGANConfig,
+        "dit_config": Gemma3WithTalkerDiTConfig,
+        "bigvgan_config": Gemma3WithTalkerBigVGANConfig,
     }
 
     def __init__(self, dit_config=None, bigvgan_config=None, **kwargs):
@@ -1083,46 +772,52 @@ class Gemma3Token2WavConfig(PretrainedConfig):
             dit_config = {}
         if bigvgan_config is None:
             bigvgan_config = {}
-        self.dit_config = Gemma3DiTConfig(**dit_config)
-        self.bigvgan_config = Gemma3BigVGANConfig(**bigvgan_config)
+        self.dit_config = Gemma3WithTalkerDiTConfig(**dit_config)
+        self.bigvgan_config = Gemma3WithTalkerBigVGANConfig(**bigvgan_config)
         super().__init__(**kwargs)
 
 
 class Gemma3WithTalkerConfig(PretrainedConfig):
     model_type = "gemma3_with_talker"
     sub_configs = {
-        "thinker_config": Gemma3ThinkerConfig,
-        "talker_config": Gemma3TalkerConfig,
-        "token2wav_config": Gemma3Token2WavConfig,
+        "thinker_config": Gemma3WithTalkerThinkerConfig,
+        "talker_config": Gemma3WithTalkerTalkerConfig,
+        "token2wav_config": Gemma3WithTalkerToken2WavConfig,
     }
 
     def __init__(
         self,
-        thinker_config: Optional[Union[Gemma3ThinkerConfig, Dict[str, Any]]] = None,
-        talker_config: Optional[Union[Gemma3TalkerConfig, Dict[str, Any]]] = None,
-        token2wav_config: Optional[Union[Gemma3Token2WavConfig, Dict[str, Any]]] = None,
+        thinker_config: Optional[
+            Union[Gemma3WithTalkerThinkerConfig, Dict[str, Any]]
+        ] = None,
+        talker_config: Optional[
+            Union[Gemma3WithTalkerTalkerConfig, Dict[str, Any]]
+        ] = None,
+        token2wav_config: Optional[
+            Union[Gemma3WithTalkerToken2WavConfig, Dict[str, Any]]
+        ] = None,
         enable_audio_output: bool = True,
         **kwargs,
     ):
         if thinker_config is None:
-            thinker_config = Gemma3ThinkerConfig()
+            thinker_config = Gemma3WithTalkerThinkerConfig()
             logger.info(
-                "thinker_config is None, using default Gemma3ThinkerConfig config."
+                "thinker_config is None, using default Gemma3WithTalkerThinkerConfig config."
             )
         elif isinstance(thinker_config, dict):
-            thinker_config = Gemma3ThinkerConfig(**thinker_config)
+            thinker_config = Gemma3WithTalkerThinkerConfig(**thinker_config)
 
         if isinstance(talker_config, dict):
-            talker_config = Gemma3TalkerConfig(**talker_config)
+            talker_config = Gemma3WithTalkerTalkerConfig(**talker_config)
         elif talker_config is None:
-            talker_config = Gemma3TalkerConfig()
+            talker_config = Gemma3WithTalkerTalkerConfig()
             logger.info(
                 "talker_config is None, using default Gemma3TalkerConfig config."
             )
         if isinstance(token2wav_config, dict):
-            token2wav_config = Gemma3Token2WavConfig(**token2wav_config)
+            token2wav_config = Gemma3WithTalkerToken2WavConfig(**token2wav_config)
         elif token2wav_config is None:
-            token2wav_config = Gemma3Token2WavConfig()
+            token2wav_config = Gemma3WithTalkerToken2WavConfig()
             logger.info(
                 "token2wav_config is None, using default Gemma3Token2WavConfig config."
             )
@@ -1149,9 +844,7 @@ class Gemma3WithTalkerConfig(PretrainedConfig):
 
 
 __all__ = [
-    "Gemma3ThinkerConfig",
-    "Gemma3TalkerConfig",
-    "Gemma3Token2WavConfig",
+    "Gemma3WithTalkerTalkerConfig",
+    "Gemma3WithTalkerToken2WavConfig",
     "Gemma3WithTalkerConfig",
-    "Gemma3WithTalkerTextConfig",
 ]
