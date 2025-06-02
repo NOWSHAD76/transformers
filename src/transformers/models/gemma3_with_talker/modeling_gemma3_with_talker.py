@@ -1377,7 +1377,7 @@ class Gemma3WithTalkerThinkerForCausalLM(
     Gemma3WithTalkerThinkerPreTrainedModel, GenerationMixin
 ):
     # _tied_weights_keys = ["lm_head.weight"]
-    _tied_weights_keys = ["lm_head.weight"]
+    _tied_weights_keys = ["thinker.lm_head.weight"]
     _tp_plan = {"lm_head": "colwise_rep"}
     _pp_plan = {"lm_head": (["hidden_states"], ["logits"])}
     config_class = Gemma3WithTalkerThinkerTextConfig
@@ -1819,7 +1819,7 @@ class Gemma3WithTalkerThinkerForConditionalGeneration(
         "^multi_modal_projector": "model.multi_modal_projector",
         "^lm_head": "lm_head",
     }
-    _tied_weights_keys = ["lm_head.weight"]
+    _tied_weights_keys = ["thinker.lm_head.weight"]
 
     def __init__(self, config: Gemma3WithTalkerThinkerConfig):
         super().__init__(config)
