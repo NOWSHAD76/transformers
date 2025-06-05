@@ -111,15 +111,9 @@ class Gemma3WithTalkerPreTrainedModel(PreTrainedModel):
     def _init_weights(self, module):
         # important: this ported version of Qwen2.5OmniThinker isn't meant for training from scratch - only
         # inference and fine-tuning - so the proper init weights code has been removed
-        std = (
-            self.config.initializer_range
-            if hasattr(self.config, "initializer_range")
-            else 0.02
-        )
+        std = self.config.initializer_range if hasattr(self.config, "initializer_range") else 0.02
 
-        if isinstance(
-            module, (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.ConvTranspose1d)
-        ):
+        if isinstance(module, (nn.Linear, nn.Conv1d, nn.Conv2d, nn.Conv3d, nn.ConvTranspose1d)):
             module.weight.data.normal_(mean=0.0, std=std)
             if module.bias is not None:
                 module.bias.data.zero_()
@@ -134,9 +128,7 @@ class Gemma3WithTalkerPreTrainedModel(PreTrainedModel):
             module.weight.data.fill_(1.0)
 
 
-class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
-    Gemma3WithTalkerPreTrainedModel
-):
+class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(Gemma3WithTalkerPreTrainedModel):
     def _prepare_4d_causal_attention_mask_with_cache_position(
         self,
         attention_mask: torch.Tensor,
@@ -182,23 +174,16 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
             )
             if sequence_length != 1:
                 causal_mask = torch.triu(causal_mask, diagonal=1)
-            causal_mask *= torch.arange(
-                target_length, device=device
-            ) > cache_position.reshape(-1, 1)
+            causal_mask *= torch.arange(target_length, device=device) > cache_position.reshape(-1, 1)
             causal_mask = causal_mask[None, None, :, :].expand(batch_size, 1, -1, -1)
             if attention_mask is not None:
-                causal_mask = (
-                    causal_mask.clone()
-                )  # copy to contiguous memory for in-place edit
+                causal_mask = causal_mask.clone()  # copy to contiguous memory for in-place edit
                 mask_length = attention_mask.shape[-1]
-                padding_mask = (
-                    causal_mask[:, :, :, :mask_length]
-                    + attention_mask[:, None, None, :]
-                )
+                padding_mask = causal_mask[:, :, :, :mask_length] + attention_mask[:, None, None, :]
                 padding_mask = padding_mask == 0
-                causal_mask[:, :, :, :mask_length] = causal_mask[
-                    :, :, :, :mask_length
-                ].masked_fill(padding_mask, min_dtype)
+                causal_mask[:, :, :, :mask_length] = causal_mask[:, :, :, :mask_length].masked_fill(
+                    padding_mask, min_dtype
+                )
 
         return causal_mask
 
@@ -214,25 +199,9 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
         llm_pos_ids_list = []
         llm_grid_h = grid_hs[vision_idx] // spatial_merge_size
         llm_grid_w = grid_ws[vision_idx] // spatial_merge_size
-        h_index = (
-            torch.arange(llm_grid_h)
-            .view(1, -1, 1)
-            .expand(len(t_index), -1, llm_grid_w)
-            .flatten()
-        )
-        w_index = (
-            torch.arange(llm_grid_w)
-            .view(1, 1, -1)
-            .expand(len(t_index), llm_grid_h, -1)
-            .flatten()
-        )
-        t_index = (
-            torch.Tensor(t_index)
-            .view(-1, 1)
-            .expand(-1, llm_grid_h * llm_grid_w)
-            .flatten()
-            .long()
-        )
+        h_index = torch.arange(llm_grid_h).view(1, -1, 1).expand(len(t_index), -1, llm_grid_w).flatten()
+        w_index = torch.arange(llm_grid_w).view(1, 1, -1).expand(len(t_index), llm_grid_h, -1).flatten()
+        t_index = torch.Tensor(t_index).view(-1, 1).expand(-1, llm_grid_h * llm_grid_w).flatten().long()
         _llm_pos_ids = torch.stack([t_index, h_index, w_index])
         llm_pos_ids_list.append(_llm_pos_ids + start_idx)  # + 1 ) # 12.09 by malinhan
         llm_pos_ids = torch.cat(llm_pos_ids_list, dim=1)
@@ -352,9 +321,7 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
         seconds_per_chunk = self.config.seconds_per_chunk
 
         mrope_position_deltas = []
-        if input_ids is not None and (
-            image_grid_thw is not None or video_grid_thw is not None
-        ):
+        if input_ids is not None and (image_grid_thw is not None or video_grid_thw is not None):
             total_input_ids = input_ids
             if attention_mask is None:
                 attention_mask = torch.ones_like(total_input_ids)
@@ -370,9 +337,7 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
             for i, input_ids in enumerate(total_input_ids):
                 input_ids = input_ids[attention_mask[i] == 1]
                 image_nums, video_nums, audio_nums = 0, 0, 0
-                vision_start_indices = torch.argwhere(
-                    input_ids == vision_start_token_id
-                ).squeeze(1)
+                vision_start_indices = torch.argwhere(input_ids == vision_start_token_id).squeeze(1)
                 vision_tokens = input_ids[vision_start_indices + 1]
                 audio_nums = torch.sum(input_ids == audio_start_token_id)
                 image_nums = (vision_tokens == image_token_id).sum()
@@ -390,16 +355,10 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                     audio_nums,
                 )
                 multimodal_nums = (
-                    image_nums + audio_nums
-                    if use_audio_in_video
-                    else image_nums + video_nums + audio_nums
+                    image_nums + audio_nums if use_audio_in_video else image_nums + video_nums + audio_nums
                 )
                 for _ in range(multimodal_nums):
-                    st_idx = (
-                        llm_pos_ids_list[-1].max() + 1
-                        if len(llm_pos_ids_list) > 0
-                        else 0
-                    )
+                    st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                     if image_token_id in input_tokens and remain_images > 0:
                         ed_image = input_tokens.index(image_token_id, st)
                     else:
@@ -416,48 +375,21 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                     if min_ed == ed_audio:
                         text_len = min_ed - st - 1
                         if text_len != 0:
-                            st_idx = (
-                                llm_pos_ids_list[-1].max() + 1
-                                if len(llm_pos_ids_list) > 0
-                                else 0
-                            )
-                            llm_pos_ids_list.append(
-                                torch.arange(text_len).view(1, -1).expand(3, -1)
-                                + st_idx
-                            )
+                            st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+                            llm_pos_ids_list.append(torch.arange(text_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         bos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
-                        audio_len = (
-                            (audio_seqlens[audio_idx] - 1) // 2 + 1 - 2
-                        ) // 2 + 1
-                        llm_pos_ids = (
-                            torch.arange(audio_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+                        audio_len = ((audio_seqlens[audio_idx] - 1) // 2 + 1 - 2) // 2 + 1
+                        llm_pos_ids = torch.arange(audio_len).view(1, -1).expand(3, -1) + st_idx
                         llm_pos_ids_list.append(llm_pos_ids)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         eos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx)
 
                         st += text_len + bos_len + audio_len + eos_len
                         audio_idx += 1
@@ -466,37 +398,18 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                     elif min_ed == ed_image:
                         text_len = min_ed - st - 1
                         if text_len != 0:
-                            st_idx = (
-                                llm_pos_ids_list[-1].max() + 1
-                                if len(llm_pos_ids_list) > 0
-                                else 0
-                            )
-                            llm_pos_ids_list.append(
-                                torch.arange(text_len).view(1, -1).expand(3, -1)
-                                + st_idx
-                            )
+                            st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+                            llm_pos_ids_list.append(torch.arange(text_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         bos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         grid_t = image_grid_thw[image_idx][0]
                         grid_hs = image_grid_thw[:, 1]
                         grid_ws = image_grid_thw[:, 2]
-                        t_index = (
-                            torch.arange(grid_t) * 1 * position_id_per_seconds
-                        ).long()
+                        t_index = (torch.arange(grid_t) * 1 * position_id_per_seconds).long()
                         llm_pos_ids = self.get_llm_pos_ids_for_vision(
                             st_idx,
                             image_idx,
@@ -505,20 +418,12 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                             grid_hs,
                             grid_ws,
                         )
-                        image_len = image_grid_thw[image_idx].prod() // (
-                            spatial_merge_size**2
-                        )
+                        image_len = image_grid_thw[image_idx].prod() // (spatial_merge_size**2)
                         llm_pos_ids_list.append(llm_pos_ids)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         eos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx)
 
                         st += text_len + bos_len + image_len + eos_len
                         image_idx += 1
@@ -527,38 +432,19 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                     elif min_ed == ed_video and not use_audio_in_video:
                         text_len = min_ed - st - 1
                         if text_len != 0:
-                            st_idx = (
-                                llm_pos_ids_list[-1].max() + 1
-                                if len(llm_pos_ids_list) > 0
-                                else 0
-                            )
-                            llm_pos_ids_list.append(
-                                torch.arange(text_len).view(1, -1).expand(3, -1)
-                                + st_idx
-                            )
+                            st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+                            llm_pos_ids_list.append(torch.arange(text_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         bos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         grid_t = video_grid_thw[video_idx][0]
                         grid_hs = video_grid_thw[:, 1]
                         grid_ws = video_grid_thw[:, 2]
                         t_index = (
-                            torch.arange(grid_t)
-                            * second_per_grids[video_idx].cpu().float()
-                            * position_id_per_seconds
+                            torch.arange(grid_t) * second_per_grids[video_idx].cpu().float() * position_id_per_seconds
                         ).long()
                         llm_pos_ids = self.get_llm_pos_ids_for_vision(
                             st_idx,
@@ -568,20 +454,12 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                             grid_hs,
                             grid_ws,
                         )
-                        video_len = video_grid_thw[video_idx].prod() // (
-                            spatial_merge_size**2
-                        )
+                        video_len = video_grid_thw[video_idx].prod() // (spatial_merge_size**2)
                         llm_pos_ids_list.append(llm_pos_ids)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         eos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx)
 
                         st += text_len + bos_len + video_len + eos_len
                         video_idx += 1
@@ -590,48 +468,23 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                     elif min_ed == ed_video and use_audio_in_video:
                         text_len = min_ed - st - 2
                         if text_len != 0:
-                            st_idx = (
-                                llm_pos_ids_list[-1].max() + 1
-                                if len(llm_pos_ids_list) > 0
-                                else 0
-                            )
-                            llm_pos_ids_list.append(
-                                torch.arange(text_len).view(1, -1).expand(3, -1)
-                                + st_idx
-                            )
+                            st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+                            llm_pos_ids_list.append(torch.arange(text_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         bos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
-                        llm_pos_ids_list.append(
-                            torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx)
+                        llm_pos_ids_list.append(torch.arange(bos_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
-                        audio_len = (
-                            (audio_seqlens[audio_idx] - 1) // 2 + 1 - 2
-                        ) // 2 + 1
-                        audio_llm_pos_ids = (
-                            torch.arange(audio_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
+                        audio_len = ((audio_seqlens[audio_idx] - 1) // 2 + 1 - 2) // 2 + 1
+                        audio_llm_pos_ids = torch.arange(audio_len).view(1, -1).expand(3, -1) + st_idx
                         grid_t = video_grid_thw[video_idx][0]
                         grid_hs = video_grid_thw[:, 1]
                         grid_ws = video_grid_thw[:, 2]
 
                         t_index = (
-                            torch.arange(grid_t)
-                            * second_per_grids[video_idx].cpu().float()
-                            * position_id_per_seconds
+                            torch.arange(grid_t) * second_per_grids[video_idx].cpu().float() * position_id_per_seconds
                         ).long()
                         video_llm_pos_ids = self.get_llm_pos_ids_for_vision(
                             st_idx,
@@ -642,65 +495,33 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                             grid_ws,
                         )
 
-                        t_ntoken_per_chunk = int(
-                            position_id_per_seconds * seconds_per_chunk
-                        )
-                        video_chunk_indexes = self.get_chunked_index(
-                            video_llm_pos_ids[0], t_ntoken_per_chunk, st_idx
-                        )
-                        audio_chunk_indexes = self.get_chunked_index(
-                            audio_llm_pos_ids[0], t_ntoken_per_chunk, st_idx
-                        )
+                        t_ntoken_per_chunk = int(position_id_per_seconds * seconds_per_chunk)
+                        video_chunk_indexes = self.get_chunked_index(video_llm_pos_ids[0], t_ntoken_per_chunk, st_idx)
+                        audio_chunk_indexes = self.get_chunked_index(audio_llm_pos_ids[0], t_ntoken_per_chunk, st_idx)
                         sub_len = 0
-                        for j in range(
-                            max(len(video_chunk_indexes), len(audio_chunk_indexes))
-                        ):
-                            video_chunk_index = (
-                                video_chunk_indexes[j]
-                                if j < len(video_chunk_indexes)
-                                else None
-                            )
-                            audio_chunk_index = (
-                                audio_chunk_indexes[j]
-                                if j < len(audio_chunk_indexes)
-                                else None
-                            )
+                        for j in range(max(len(video_chunk_indexes), len(audio_chunk_indexes))):
+                            video_chunk_index = video_chunk_indexes[j] if j < len(video_chunk_indexes) else None
+                            audio_chunk_index = audio_chunk_indexes[j] if j < len(audio_chunk_indexes) else None
                             if video_chunk_index is not None:
                                 sub_len += video_chunk_index[1] - video_chunk_index[0]
 
                                 llm_pos_ids_list.append(
-                                    video_llm_pos_ids[
-                                        :, video_chunk_index[0] : video_chunk_index[1]
-                                    ]
+                                    video_llm_pos_ids[:, video_chunk_index[0] : video_chunk_index[1]]
                                 )
                             if audio_chunk_index is not None:
                                 sub_len += audio_chunk_index[1] - audio_chunk_index[0]
 
                                 llm_pos_ids_list.append(
-                                    audio_llm_pos_ids[
-                                        :, audio_chunk_index[0] : audio_chunk_index[1]
-                                    ]
+                                    audio_llm_pos_ids[:, audio_chunk_index[0] : audio_chunk_index[1]]
                                 )
-                        video_len = video_grid_thw[video_idx].prod() // (
-                            spatial_merge_size**2
-                        )
+                        video_len = video_grid_thw[video_idx].prod() // (spatial_merge_size**2)
 
-                        st_idx = (
-                            llm_pos_ids_list[-1].max() + 1
-                            if len(llm_pos_ids_list) > 0
-                            else 0
-                        )
+                        st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                         eos_len = 1
-                        llm_pos_ids_list.append(
-                            torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
-                        llm_pos_ids_list.append(
-                            torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx
-                        )
+                        llm_pos_ids_list.append(torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx)
+                        llm_pos_ids_list.append(torch.arange(eos_len).view(1, -1).expand(3, -1) + st_idx)
 
-                        st += (
-                            text_len + bos_len * 2 + audio_len + video_len + eos_len * 2
-                        )
+                        st += text_len + bos_len * 2 + audio_len + video_len + eos_len * 2
 
                         audio_idx += 1
                         video_idx += 1
@@ -708,39 +529,23 @@ class Gemma3WithTalkerPreTrainedModelForConditionalGeneration(
                         remain_audios -= 1
 
                 if st < len(input_tokens):
-                    st_idx = (
-                        llm_pos_ids_list[-1].max() + 1
-                        if len(llm_pos_ids_list) > 0
-                        else 0
-                    )
+                    st_idx = llm_pos_ids_list[-1].max() + 1 if len(llm_pos_ids_list) > 0 else 0
                     text_len = len(input_tokens) - st
-                    llm_pos_ids_list.append(
-                        torch.arange(text_len).view(1, -1).expand(3, -1) + st_idx
-                    )
+                    llm_pos_ids_list.append(torch.arange(text_len).view(1, -1).expand(3, -1) + st_idx)
 
                 llm_positions = torch.cat(llm_pos_ids_list, dim=1).reshape(3, -1)
 
-                position_ids[..., i, attention_mask[i] == 1] = llm_positions.to(
-                    position_ids.device
-                )
+                position_ids[..., i, attention_mask[i] == 1] = llm_positions.to(position_ids.device)
                 mrope_position_deltas.append(llm_positions.max() + 1 - len(input_ids))
-            mrope_position_deltas = torch.tensor(
-                mrope_position_deltas, device=input_ids.device
-            ).unsqueeze(1)
+            mrope_position_deltas = torch.tensor(mrope_position_deltas, device=input_ids.device).unsqueeze(1)
 
             return position_ids, mrope_position_deltas
         else:
             position_ids = attention_mask.long().cumsum(-1) - 1
             position_ids.masked_fill_(attention_mask == 0, 1)
-            position_ids = (
-                position_ids.unsqueeze(0).expand(3, -1, -1).to(attention_mask.device)
-            )
-            max_position_ids = position_ids.max(0, keepdim=False)[0].max(
-                -1, keepdim=True
-            )[0]
-            mrope_position_deltas = (
-                max_position_ids + 1 - torch.sum(attention_mask, dim=-1, keepdim=True)
-            )
+            position_ids = position_ids.unsqueeze(0).expand(3, -1, -1).to(attention_mask.device)
+            max_position_ids = position_ids.max(0, keepdim=False)[0].max(-1, keepdim=True)[0]
+            mrope_position_deltas = max_position_ids + 1 - torch.sum(attention_mask, dim=-1, keepdim=True)
 
             return position_ids, mrope_position_deltas
 
@@ -805,9 +610,7 @@ class Gemma3WithTalkerThinkerRotaryEmbedding(nn.Module):
         super().__init__()
         # BC: "rope_type" was originally "type"
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
-            self.rope_type = config.rope_scaling.get(
-                "rope_type", config.rope_scaling.get("type")
-            )
+            self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
         else:
             self.rope_type = "default"
         self.max_seq_len_cached = config.max_position_embeddings
@@ -823,23 +626,12 @@ class Gemma3WithTalkerThinkerRotaryEmbedding(nn.Module):
     @torch.no_grad()
     @dynamic_rope_update  # power user: used with advanced RoPE types (e.g. dynamic rope)
     def forward(self, x, position_ids):
-        inv_freq_expanded = (
-            self.inv_freq[None, :, None]
-            .float()
-            .expand(position_ids.shape[0], -1, 1)
-            .to(x.device)
-        )
+        inv_freq_expanded = self.inv_freq[None, :, None].float().expand(position_ids.shape[0], -1, 1).to(x.device)
         position_ids_expanded = position_ids[:, None, :].float()
 
-        device_type = (
-            x.device.type
-            if isinstance(x.device.type, str) and x.device.type != "mps"
-            else "cpu"
-        )
+        device_type = x.device.type if isinstance(x.device.type, str) and x.device.type != "mps" else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):  # Force float32
-            freqs = (
-                inv_freq_expanded.float() @ position_ids_expanded.float()
-            ).transpose(1, 2)
+            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(1, 2)
             emb = torch.cat((freqs, freqs), dim=-1)
             cos = emb.cos() * self.attention_scaling
             sin = emb.sin() * self.attention_scaling
@@ -889,9 +681,7 @@ def repeat_kv(hidden_states: torch.Tensor, n_rep: int) -> torch.Tensor:
     batch, num_key_value_heads, slen, head_dim = hidden_states.shape
     if n_rep == 1:
         return hidden_states
-    hidden_states = hidden_states[:, :, None, :, :].expand(
-        batch, num_key_value_heads, n_rep, slen, head_dim
-    )
+    hidden_states = hidden_states[:, :, None, :, :].expand(batch, num_key_value_heads, n_rep, slen, head_dim)
     return hidden_states.reshape(batch, num_key_value_heads * n_rep, slen, head_dim)
 
 
@@ -923,12 +713,8 @@ def eager_attention_forward(
         attn_weights = attn_weights + causal_mask
 
     # upcast attention to fp32
-    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(
-        query.dtype
-    )
-    attn_weights = nn.functional.dropout(
-        attn_weights, p=dropout, training=module.training
-    )
+    attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query.dtype)
+    attn_weights = nn.functional.dropout(attn_weights, p=dropout, training=module.training)
     attn_output = torch.matmul(attn_weights, value_states)
     attn_output = attn_output.transpose(1, 2).contiguous()
     return attn_output, attn_weights
@@ -942,12 +728,8 @@ class Gemma3WithTalkerThinkerAttention(nn.Module):
         self.is_sliding = config.layer_types[layer_idx] == "sliding_attention"
         self.config = config
         self.layer_idx = layer_idx
-        self.head_dim = getattr(
-            config, "head_dim", config.hidden_size // config.num_attention_heads
-        )
-        self.num_key_value_groups = (
-            config.num_attention_heads // config.num_key_value_heads
-        )
+        self.head_dim = getattr(config, "head_dim", config.hidden_size // config.num_attention_heads)
+        self.num_key_value_groups = config.num_attention_heads // config.num_key_value_heads
         self.scaling = config.query_pre_attn_scalar**-0.5
         self.attention_dropout = self.config.attention_dropout
         self.is_causal = True
@@ -975,12 +757,8 @@ class Gemma3WithTalkerThinkerAttention(nn.Module):
         self.attn_logit_softcapping = self.config.attn_logit_softcapping
         self.sliding_window = config.sliding_window if self.is_sliding else None
 
-        self.q_norm = Gemma3WithTalkerThinkerRMSNorm(
-            dim=config.head_dim, eps=config.rms_norm_eps
-        )
-        self.k_norm = Gemma3WithTalkerThinkerRMSNorm(
-            dim=config.head_dim, eps=config.rms_norm_eps
-        )
+        self.q_norm = Gemma3WithTalkerThinkerRMSNorm(dim=config.head_dim, eps=config.rms_norm_eps)
+        self.k_norm = Gemma3WithTalkerThinkerRMSNorm(dim=config.head_dim, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -1002,22 +780,16 @@ class Gemma3WithTalkerThinkerAttention(nn.Module):
         key_states = self.k_norm(key_states)
 
         cos, sin = position_embeddings
-        query_states, key_states = apply_rotary_pos_emb(
-            query_states, key_states, cos, sin
-        )
+        query_states, key_states = apply_rotary_pos_emb(query_states, key_states, cos, sin)
 
         if past_key_value is not None:
             # sin and cos are specific to RoPE models; cache_position needed for the static cache
             cache_kwargs = {"sin": sin, "cos": cos, "cache_position": cache_position}
-            key_states, value_states = past_key_value.update(
-                key_states, value_states, self.layer_idx, cache_kwargs
-            )
+            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
         attention_interface: Callable = eager_attention_forward
         if self.config._attn_implementation != "eager":
-            attention_interface = ALL_ATTENTION_FUNCTIONS[
-                self.config._attn_implementation
-            ]
+            attention_interface = ALL_ATTENTION_FUNCTIONS[self.config._attn_implementation]
 
         attn_output, attn_weights = attention_interface(
             self,
@@ -1043,22 +815,12 @@ class Gemma3WithTalkerThinkerDecoderLayer(nn.Module):
         self.hidden_size = config.hidden_size
         self.layer_idx = layer_idx
         self.attention_type = config.layer_types[layer_idx]
-        self.self_attn = Gemma3WithTalkerThinkerAttention(
-            config=config, layer_idx=layer_idx
-        )
+        self.self_attn = Gemma3WithTalkerThinkerAttention(config=config, layer_idx=layer_idx)
         self.mlp = Gemma3WithTalkerThinkerMLP(config)
-        self.input_layernorm = Gemma3WithTalkerThinkerRMSNorm(
-            self.hidden_size, eps=config.rms_norm_eps
-        )
-        self.post_attention_layernorm = Gemma3WithTalkerThinkerRMSNorm(
-            self.hidden_size, eps=config.rms_norm_eps
-        )
-        self.pre_feedforward_layernorm = Gemma3WithTalkerThinkerRMSNorm(
-            self.hidden_size, eps=config.rms_norm_eps
-        )
-        self.post_feedforward_layernorm = Gemma3WithTalkerThinkerRMSNorm(
-            self.hidden_size, eps=config.rms_norm_eps
-        )
+        self.input_layernorm = Gemma3WithTalkerThinkerRMSNorm(self.hidden_size, eps=config.rms_norm_eps)
+        self.post_attention_layernorm = Gemma3WithTalkerThinkerRMSNorm(self.hidden_size, eps=config.rms_norm_eps)
+        self.pre_feedforward_layernorm = Gemma3WithTalkerThinkerRMSNorm(self.hidden_size, eps=config.rms_norm_eps)
+        self.post_feedforward_layernorm = Gemma3WithTalkerThinkerRMSNorm(self.hidden_size, eps=config.rms_norm_eps)
 
     @deprecate_kwarg("last_cache_position", version="4.53.0")
     def forward(
@@ -1073,9 +835,7 @@ class Gemma3WithTalkerThinkerDecoderLayer(nn.Module):
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
         **kwargs,
-    ) -> tuple[
-        torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]
-    ]:
+    ) -> tuple[torch.FloatTensor, Optional[tuple[torch.FloatTensor, torch.FloatTensor]]]:
         residual = hidden_states
 
         hidden_states = self.input_layernorm(hidden_states)
@@ -1119,23 +879,17 @@ class Gemma3WithTalkerThinkerMultiModalProjector(nn.Module):
         super().__init__()
 
         self.mm_input_projection_weight = nn.Parameter(
-            torch.zeros(
-                config.vision_config.hidden_size, config.text_config.hidden_size
-            )
+            torch.zeros(config.vision_config.hidden_size, config.text_config.hidden_size)
         )
 
         self.mm_soft_emb_norm = Gemma3WithTalkerThinkerRMSNorm(
             config.vision_config.hidden_size, eps=config.vision_config.layer_norm_eps
         )
 
-        self.patches_per_image = int(
-            config.vision_config.image_size // config.vision_config.patch_size
-        )
+        self.patches_per_image = int(config.vision_config.image_size // config.vision_config.patch_size)
         self.tokens_per_side = int(config.mm_tokens_per_image**0.5)
         self.kernel_size = self.patches_per_image // self.tokens_per_side
-        self.avg_pool = nn.AvgPool2d(
-            kernel_size=self.kernel_size, stride=self.kernel_size
-        )
+        self.avg_pool = nn.AvgPool2d(kernel_size=self.kernel_size, stride=self.kernel_size)
 
     def forward(self, vision_outputs: torch.Tensor):
         batch_size, _, seq_length = vision_outputs.shape
@@ -1152,9 +906,7 @@ class Gemma3WithTalkerThinkerMultiModalProjector(nn.Module):
 
         normed_vision_outputs = self.mm_soft_emb_norm(pooled_vision_outputs)
 
-        projected_vision_outputs = torch.matmul(
-            normed_vision_outputs, self.mm_input_projection_weight
-        )
+        projected_vision_outputs = torch.matmul(normed_vision_outputs, self.mm_input_projection_weight)
         return projected_vision_outputs.type_as(vision_outputs)
 
 
@@ -1212,14 +964,9 @@ class Gemma3WithTalkerThinkerTextModel(Gemma3WithTalkerThinkerPreTrainedModel):
             embed_scale=self.config.hidden_size**0.5,
         )
         self.layers = nn.ModuleList(
-            [
-                Gemma3WithTalkerThinkerDecoderLayer(config, layer_idx)
-                for layer_idx in range(config.num_hidden_layers)
-            ]
+            [Gemma3WithTalkerThinkerDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
-        self.norm = Gemma3WithTalkerThinkerRMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.norm = Gemma3WithTalkerThinkerRMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         self.rotary_emb = Gemma3WithTalkerThinkerRotaryEmbedding(config=config)
         self.gradient_checkpointing = False
 
@@ -1254,22 +1001,14 @@ class Gemma3WithTalkerThinkerTextModel(Gemma3WithTalkerThinkerPreTrainedModel):
         cache_position: Optional[torch.LongTensor] = None,
         **flash_attn_kwargs: Unpack[FlashAttentionKwargs],
     ) -> BaseModelOutputWithPast:
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
 
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
         if self.gradient_checkpointing and self.training and use_cache:
             logger.warning_once(
@@ -1284,9 +1023,7 @@ class Gemma3WithTalkerThinkerTextModel(Gemma3WithTalkerThinkerPreTrainedModel):
             past_key_values = DynamicCache()
 
         if cache_position is None:
-            past_seen_tokens = (
-                past_key_values.get_seq_length() if past_key_values is not None else 0
-            )
+            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
             cache_position = torch.arange(
                 past_seen_tokens,
                 past_seen_tokens + inputs_embeds.shape[1],
@@ -1373,9 +1110,7 @@ class Gemma3WithTalkerThinkerTextModel(Gemma3WithTalkerThinkerPreTrainedModel):
 
 
 # @auto_docstring
-class Gemma3WithTalkerThinkerForCausalLM(
-    Gemma3WithTalkerThinkerPreTrainedModel, GenerationMixin
-):
+class Gemma3WithTalkerThinkerForCausalLM(Gemma3WithTalkerThinkerPreTrainedModel, GenerationMixin):
     # _tied_weights_keys = ["lm_head.weight"]
     _tied_weights_keys = ["thinker.lm_head.weight"]
     _tp_plan = {"lm_head": "colwise_rep"}
@@ -1455,15 +1190,9 @@ class Gemma3WithTalkerThinkerForCausalLM(
                 "It is strongly recommended to train Gemma3WithTalkerThinker models with the `eager` attention implementation "
                 f"instead of `{self.config._attn_implementation}`. Use `eager` with `AutoModelForCausalLM.from_pretrained('<path-to-checkpoint>', attn_implementation='eager')`."
             )
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         # decoder outputs consists of (dec_features, layer_state, dec_hidden, dec_attn)
         outputs: BaseModelOutputWithPast = self.model(
@@ -1481,11 +1210,7 @@ class Gemma3WithTalkerThinkerForCausalLM(
 
         hidden_states = outputs.last_hidden_state
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
-        slice_indices = (
-            slice(-logits_to_keep, None)
-            if isinstance(logits_to_keep, int)
-            else logits_to_keep
-        )
+        slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
         logits = self.lm_head(hidden_states[:, slice_indices, :])
         if self.config.final_logit_softcapping is not None:
             logits = logits / self.config.final_logit_softcapping
@@ -1573,9 +1298,7 @@ class Gemma3WithTalkerThinkerModel(Gemma3WithTalkerThinkerPreTrainedModel):
         language_model = AutoModel.from_config(config=config.text_config)
         self.language_model = language_model
 
-        self.pad_token_id = (
-            self.config.pad_token_id if self.config.pad_token_id is not None else -1
-        )
+        self.pad_token_id = self.config.pad_token_id if self.config.pad_token_id is not None else -1
         self.post_init()
 
     def get_input_embeddings(self):
@@ -1645,23 +1368,13 @@ class Gemma3WithTalkerThinkerModel(Gemma3WithTalkerThinkerPreTrainedModel):
         "Where is the cat standing?\nsnow"
         ```"""
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         # Replace image id woth PAD if the image token if OOV, to avoid index-errors
         if input_ids is not None and self.config.image_token_id >= self.vocab_size:
@@ -1675,9 +1388,7 @@ class Gemma3WithTalkerThinkerModel(Gemma3WithTalkerThinkerPreTrainedModel):
             inputs_embeds = self.get_input_embeddings()(llm_input_ids)
 
         if cache_position is None:
-            past_seen_tokens = (
-                past_key_values.get_seq_length() if past_key_values is not None else 0
-            )
+            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
             cache_position = torch.arange(
                 past_seen_tokens,
                 past_seen_tokens + inputs_embeds.shape[1],
@@ -1697,29 +1408,18 @@ class Gemma3WithTalkerThinkerModel(Gemma3WithTalkerThinkerPreTrainedModel):
                     )
                 )
             else:
-                special_image_mask = (
-                    input_ids == self.config.image_token_id
-                ).unsqueeze(-1)
-                special_image_mask = special_image_mask.expand_as(inputs_embeds).to(
-                    inputs_embeds.device
-                )
+                special_image_mask = (input_ids == self.config.image_token_id).unsqueeze(-1)
+                special_image_mask = special_image_mask.expand_as(inputs_embeds).to(inputs_embeds.device)
 
-            if (
-                not is_torchdynamo_compiling()
-                and inputs_embeds[special_image_mask].numel() != image_features.numel()
-            ):
+            if not is_torchdynamo_compiling() and inputs_embeds[special_image_mask].numel() != image_features.numel():
                 image_tokens_in_text = (special_image_mask).sum(dim=1).sum(dim=0)[0]
                 raise ValueError(
                     f"Number of images does not match number of special image tokens in the input text. "
                     f"Got {image_tokens_in_text} image tokens in the text but {image_features.shape[0] * image_features.shape[1]} "
                     "tokens from image embeddings."
                 )
-            image_features = image_features.to(
-                inputs_embeds.device, inputs_embeds.dtype
-            )
-            inputs_embeds = inputs_embeds.masked_scatter(
-                special_image_mask, image_features
-            )
+            image_features = image_features.to(inputs_embeds.device, inputs_embeds.dtype)
+            inputs_embeds = inputs_embeds.masked_scatter(special_image_mask, image_features)
 
         # It may already have been prepared by e.g. `generate`
         if not isinstance(causal_mask_mapping := attention_mask, dict):
@@ -1810,9 +1510,7 @@ class Gemma3WithTalkerThinkerCausalLMOutputWithPast(ModelOutput):
 #     The Base Gemma3WithTalkerThinker model which consists of a vision backbone and a language model without language modeling head.,
 #     """
 # )
-class Gemma3WithTalkerThinkerForConditionalGeneration(
-    Gemma3WithTalkerThinkerPreTrainedModel, GenerationMixin
-):
+class Gemma3WithTalkerThinkerForConditionalGeneration(Gemma3WithTalkerThinkerPreTrainedModel, GenerationMixin):
     _checkpoint_conversion_mapping = {
         "^language_model.model": "model.language_model",
         "^vision_tower": "model.vision_tower",
@@ -1824,9 +1522,7 @@ class Gemma3WithTalkerThinkerForConditionalGeneration(
     def __init__(self, config: Gemma3WithTalkerThinkerConfig):
         super().__init__(config)
         self.model = Gemma3WithTalkerThinkerModel(config)
-        self.lm_head = nn.Linear(
-            config.text_config.hidden_size, config.text_config.vocab_size, bias=False
-        )
+        self.lm_head = nn.Linear(config.text_config.hidden_size, config.text_config.vocab_size, bias=False)
         self.post_init()
 
     def get_input_embeddings(self):
@@ -1918,19 +1614,11 @@ class Gemma3WithTalkerThinkerForConditionalGeneration(
         ```
         """
 
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         outputs = self.model(
             input_ids=input_ids,
@@ -1951,11 +1639,7 @@ class Gemma3WithTalkerThinkerForConditionalGeneration(
 
         hidden_states = outputs[0]
         # Only compute necessary logits, and do not upcast them to float if we are not computing the loss
-        slice_indices = (
-            slice(-logits_to_keep, None)
-            if isinstance(logits_to_keep, int)
-            else logits_to_keep
-        )
+        slice_indices = slice(-logits_to_keep, None) if isinstance(logits_to_keep, int) else logits_to_keep
         logits = self.lm_head(hidden_states[:, slice_indices, :])
 
         loss = None
@@ -1967,15 +1651,9 @@ class Gemma3WithTalkerThinkerForConditionalGeneration(
             if attention_mask is not None:
                 # we use the input attention mask to shift the logits and labels, because it is 2D.
                 # we also crop attn mask in case it is longer, which happens in PrefixTuning with peft
-                shift_attention_mask = attention_mask[:, -shift_logits.shape[1] :].to(
-                    logits.device
-                )
-                shift_logits = shift_logits[
-                    shift_attention_mask.to(logits.device) != 0
-                ].contiguous()
-                shift_labels = shift_labels[
-                    shift_attention_mask.to(shift_labels.device) != 0
-                ].contiguous()
+                shift_attention_mask = attention_mask[:, -shift_logits.shape[1] :].to(logits.device)
+                shift_logits = shift_logits[shift_attention_mask.to(logits.device) != 0].contiguous()
+                shift_labels = shift_labels[shift_attention_mask.to(shift_labels.device) != 0].contiguous()
             else:
                 shift_logits = shift_logits.contiguous()
                 shift_labels = shift_labels.contiguous()
@@ -2056,9 +1734,7 @@ class Gemma3WithTalkerThinkerForConditionalGeneration(
         # Add the token type ids mask for generate as well
         if token_type_ids is not None and input_embeds.shape[1] != 1:
             # We need to pass an additional mask function to account for token type ids, and it needs to be an `or`
-            mask_kwargs["or_mask_function"] = token_type_ids_mask_function(
-                token_type_ids.to(cache_position.device)
-            )
+            mask_kwargs["or_mask_function"] = token_type_ids_mask_function(token_type_ids.to(cache_position.device))
 
         return create_masks_for_generate(**mask_kwargs)
 
@@ -2113,9 +1789,7 @@ class Gemma3WithTalkerRotaryEmbedding(nn.Module):
         super().__init__()
         # BC: "rope_type" was originally "type"
         if hasattr(config, "rope_scaling") and config.rope_scaling is not None:
-            self.rope_type = config.rope_scaling.get(
-                "rope_type", config.rope_scaling.get("type")
-            )
+            self.rope_type = config.rope_scaling.get("rope_type", config.rope_scaling.get("type"))
         else:
             self.rope_type = "default"
         self.max_seq_len_cached = config.max_position_embeddings
@@ -2133,24 +1807,12 @@ class Gemma3WithTalkerRotaryEmbedding(nn.Module):
     def forward(self, x, position_ids):
         # In contrast to other models, Gemma3WithTalker has different position ids for the grids
         # So we expand the inv_freq to shape (3, ...)
-        inv_freq_expanded = (
-            self.inv_freq[None, None, :, None]
-            .float()
-            .expand(3, position_ids.shape[1], -1, 1)
-        )
-        position_ids_expanded = position_ids[
-            :, :, None, :
-        ].float()  # shape (3, bs, 1, positions)
+        inv_freq_expanded = self.inv_freq[None, None, :, None].float().expand(3, position_ids.shape[1], -1, 1)
+        position_ids_expanded = position_ids[:, :, None, :].float()  # shape (3, bs, 1, positions)
 
-        device_type = (
-            x.device.type
-            if isinstance(x.device.type, str) and x.device.type != "mps"
-            else "cpu"
-        )
+        device_type = x.device.type if isinstance(x.device.type, str) and x.device.type != "mps" else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):  # Force float32
-            freqs = (
-                inv_freq_expanded.float() @ position_ids_expanded.float()
-            ).transpose(2, 3)
+            freqs = (inv_freq_expanded.float() @ position_ids_expanded.float()).transpose(2, 3)
             emb = torch.cat((freqs, freqs), dim=-1)
             cos = emb.cos() * self.attention_scaling
             sin = emb.sin() * self.attention_scaling
@@ -2191,12 +1853,12 @@ def apply_multimodal_rotary_pos_emb(q, k, cos, sin, mrope_section, unsqueeze_dim
         `tuple(torch.Tensor)` comprising of the query and key tensors rotated using the Rotary Position Embedding.
     """
     mrope_section = mrope_section * 2
-    cos = torch.cat(
-        [m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1
-    ).unsqueeze(unsqueeze_dim)
-    sin = torch.cat(
-        [m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1
-    ).unsqueeze(unsqueeze_dim)
+    cos = torch.cat([m[i % 3] for i, m in enumerate(cos.split(mrope_section, dim=-1))], dim=-1).unsqueeze(
+        unsqueeze_dim
+    )
+    sin = torch.cat([m[i % 3] for i, m in enumerate(sin.split(mrope_section, dim=-1))], dim=-1).unsqueeze(
+        unsqueeze_dim
+    )
 
     q_embed = (q * cos) + (rotate_half(q) * sin)
     k_embed = (k * cos) + (rotate_half(k) * sin)
@@ -2229,18 +1891,10 @@ class Gemma3WithTalkerAttention(nn.Module):
         self.attention_dropout = config.attention_dropout
         self.rope_scaling = config.rope_scaling
 
-        self.q_proj = nn.Linear(
-            self.hidden_size, self.num_heads * self.head_dim, bias=True
-        )
-        self.k_proj = nn.Linear(
-            self.hidden_size, self.num_key_value_heads * self.head_dim, bias=True
-        )
-        self.v_proj = nn.Linear(
-            self.hidden_size, self.num_key_value_heads * self.head_dim, bias=True
-        )
-        self.o_proj = nn.Linear(
-            self.num_heads * self.head_dim, self.hidden_size, bias=False
-        )
+        self.q_proj = nn.Linear(self.hidden_size, self.num_heads * self.head_dim, bias=True)
+        self.k_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=True)
+        self.v_proj = nn.Linear(self.hidden_size, self.num_key_value_heads * self.head_dim, bias=True)
+        self.o_proj = nn.Linear(self.num_heads * self.head_dim, self.hidden_size, bias=False)
 
         self.rotary_emb = Gemma3WithTalkerRotaryEmbedding(config=config)
 
@@ -2253,9 +1907,7 @@ class Gemma3WithTalkerAttention(nn.Module):
         output_attentions: bool = False,
         use_cache: bool = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[
-            Tuple[torch.Tensor, torch.Tensor]
-        ] = None,  # necessary, but kept here for BC
+        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         bsz, q_len, _ = hidden_states.size()
 
@@ -2278,17 +1930,13 @@ class Gemma3WithTalkerAttention(nn.Module):
                 "cos": cos,
                 "cache_position": cache_position,
             }  # Specific to RoPE models
-            key_states, value_states = past_key_value.update(
-                key_states, value_states, self.layer_idx, cache_kwargs
-            )
+            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
         # repeat k/v heads if n_kv_heads < n_heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
 
-        attn_weights = torch.matmul(
-            query_states, key_states.transpose(2, 3)
-        ) / math.sqrt(self.head_dim)
+        attn_weights = torch.matmul(query_states, key_states.transpose(2, 3)) / math.sqrt(self.head_dim)
 
         if attention_mask is not None:  # no matter the length, we just slice it
             causal_mask = attention_mask[:, :, :, : key_states.shape[-2]]
@@ -2297,17 +1945,11 @@ class Gemma3WithTalkerAttention(nn.Module):
         # Fix precision issues in Qwen2-VL float16 inference
         # Replace inf values with zeros in attention weights to prevent NaN propagation
         if query_states.dtype == torch.float16:
-            attn_weights = torch.where(
-                torch.isinf(attn_weights), torch.zeros_like(attn_weights), attn_weights
-            )
+            attn_weights = torch.where(torch.isinf(attn_weights), torch.zeros_like(attn_weights), attn_weights)
 
         # upcast attention to fp32
-        attn_weights = nn.functional.softmax(
-            attn_weights, dim=-1, dtype=torch.float32
-        ).to(query_states.dtype)
-        attn_weights = nn.functional.dropout(
-            attn_weights, p=self.attention_dropout, training=self.training
-        )
+        attn_weights = nn.functional.softmax(attn_weights, dim=-1, dtype=torch.float32).to(query_states.dtype)
+        attn_weights = nn.functional.dropout(attn_weights, p=self.attention_dropout, training=self.training)
         attn_output = torch.matmul(attn_weights, value_states)
 
         if attn_output.size() != (bsz, self.num_heads, q_len, self.head_dim):
@@ -2338,9 +1980,7 @@ class Qwen2MLP(nn.Module):
         self.act_fn = ACT2FN[config.hidden_act]
 
     def forward(self, hidden_state):
-        return self.down_proj(
-            self.act_fn(self.gate_proj(hidden_state)) * self.up_proj(hidden_state)
-        )
+        return self.down_proj(self.act_fn(self.gate_proj(hidden_state)) * self.up_proj(hidden_state))
 
 
 class Gemma3WithTalkerFlashAttention2(Gemma3WithTalkerAttention):
@@ -2369,9 +2009,7 @@ class Gemma3WithTalkerFlashAttention2(Gemma3WithTalkerAttention):
         output_attentions: bool = False,
         use_cache: bool = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[
-            Tuple[torch.Tensor, torch.Tensor]
-        ] = None,  # necessary, but kept here for BC
+        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
     ):
         bsz, q_len, _ = hidden_states.size()
 
@@ -2395,9 +2033,7 @@ class Gemma3WithTalkerFlashAttention2(Gemma3WithTalkerAttention):
                 "cos": cos,
                 "cache_position": cache_position,
             }  # Specific to RoPE models
-            key_states, value_states = past_key_value.update(
-                key_states, value_states, self.layer_idx, cache_kwargs
-            )
+            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
         # repeat k/v heads if n_kv_heads < n_heads
         key_states = repeat_kv(key_states, self.num_key_value_groups)
@@ -2479,9 +2115,7 @@ class Gemma3WithTalkerSdpaAttention(Gemma3WithTalkerAttention):
         output_attentions: bool = False,
         use_cache: bool = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[
-            Tuple[torch.Tensor, torch.Tensor]
-        ] = None,  # necessary, but kept here for BC
+        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
     ) -> Tuple[torch.Tensor, Optional[torch.Tensor], Optional[Tuple[torch.Tensor]]]:
         if output_attentions:
             # TODO: Improve this warning with e.g. `model.config.attn_implementation = "manual"` once this is implemented.
@@ -2521,9 +2155,7 @@ class Gemma3WithTalkerSdpaAttention(Gemma3WithTalkerAttention):
                 "cos": cos,
                 "cache_position": cache_position,
             }  # Specific to RoPE models
-            key_states, value_states = past_key_value.update(
-                key_states, value_states, self.layer_idx, cache_kwargs
-            )
+            key_states, value_states = past_key_value.update(key_states, value_states, self.layer_idx, cache_kwargs)
 
         key_states = repeat_kv(key_states, self.num_key_value_groups)
         value_states = repeat_kv(value_states, self.num_key_value_groups)
@@ -2573,23 +2205,16 @@ class Gemma3WithTalkerDecoderLayer(nn.Module):
         super().__init__()
         self.hidden_size = config.hidden_size
 
-        if (
-            config.use_sliding_window
-            and config._attn_implementation != "flash_attention_2"
-        ):
+        if config.use_sliding_window and config._attn_implementation != "flash_attention_2":
             logger.warning_once(
                 f"Sliding Window Attention is enabled but not implemented for `{config._attn_implementation}`; "
                 "unexpected results may be encountered."
             )
-        self.self_attn = GEMMA3_WITH_TALKER_ATTENTION_CLASSES[
-            config._attn_implementation
-        ](config, layer_idx)
+        self.self_attn = GEMMA3_WITH_TALKER_ATTENTION_CLASSES[config._attn_implementation](config, layer_idx)
 
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen2RMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
 
     def forward(
         self,
@@ -2600,13 +2225,9 @@ class Gemma3WithTalkerDecoderLayer(nn.Module):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[
-            Tuple[torch.Tensor, torch.Tensor]
-        ] = None,  # necessary, but kept here for BC
+        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
         **kwargs,
-    ) -> Tuple[
-        torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
-    ]:
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
         Args:
             hidden_states (`torch.FloatTensor`): input to the layer of shape `(batch, seq_len, embed_dim)`
@@ -2672,9 +2293,7 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
     def __init__(self, config: Gemma3WithTalkerTalkerConfig):
         super().__init__(config)
 
-        self.thinker_to_talker_proj = nn.Linear(
-            config.embedding_size, config.hidden_size
-        )
+        self.thinker_to_talker_proj = nn.Linear(config.embedding_size, config.hidden_size)
 
         self.model = Gemma3WithTalkerTalkerModel(config)
         self.codebook_size = config.vocab_size
@@ -2763,19 +2382,11 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
         "Generate the caption in English: Glass is breaking."
         ```"""
 
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if attention_mask is not None and position_ids is None:
             if (
@@ -2811,11 +2422,7 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
 
             else:
                 batch_size, seq_length = input_ids.shape
-                delta = (
-                    cache_position[0] + self.rope_deltas
-                    if cache_position is not None
-                    else 0
-                )
+                delta = cache_position[0] + self.rope_deltas if cache_position is not None else 0
                 position_ids = torch.arange(seq_length, device=input_ids.device)
                 position_ids = position_ids.view(1, -1).expand(batch_size, -1)
                 position_ids = position_ids.add(delta)
@@ -2867,9 +2474,7 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
     def _get_initial_cache_position(self, seq_length, device, model_kwargs):
         # Talker needs to calculate cache_position with input_ids, so pop inputs_embeds temporarily
         inputs_embeds = model_kwargs.pop("inputs_embeds")
-        model_kwargs = super()._get_initial_cache_position(
-            seq_length, device, model_kwargs
-        )
+        model_kwargs = super()._get_initial_cache_position(seq_length, device, model_kwargs)
         model_kwargs["inputs_embeds"] = inputs_embeds
         return model_kwargs
 
@@ -2939,23 +2544,16 @@ class Gemma3WithTalkerTalkerDecoderLayer(nn.Module):
         super().__init__()
         self.hidden_size = config.hidden_size
 
-        if (
-            config.use_sliding_window
-            and config._attn_implementation != "flash_attention_2"
-        ):
+        if config.use_sliding_window and config._attn_implementation != "flash_attention_2":
             logger.warning_once(
                 f"Sliding Window Attention is enabled but not implemented for `{config._attn_implementation}`; "
                 "unexpected results may be encountered."
             )
-        self.self_attn = GEMMA3_WITH_TALKER_ATTENTION_CLASSES[
-            config._attn_implementation
-        ](config, layer_idx)
+        self.self_attn = GEMMA3_WITH_TALKER_ATTENTION_CLASSES[config._attn_implementation](config, layer_idx)
 
         self.mlp = Qwen2MLP(config)
         self.input_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
-        self.post_attention_layernorm = Qwen2RMSNorm(
-            config.hidden_size, eps=config.rms_norm_eps
-        )
+        self.post_attention_layernorm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
         # self.hidden_size = config.hidden_size
 
         # if (
@@ -2985,13 +2583,9 @@ class Gemma3WithTalkerTalkerDecoderLayer(nn.Module):
         output_attentions: Optional[bool] = False,
         use_cache: Optional[bool] = False,
         cache_position: Optional[torch.LongTensor] = None,
-        position_embeddings: Optional[
-            Tuple[torch.Tensor, torch.Tensor]
-        ] = None,  # necessary, but kept here for BC
+        position_embeddings: Optional[Tuple[torch.Tensor, torch.Tensor]] = None,  # necessary, but kept here for BC
         **kwargs,
-    ) -> Tuple[
-        torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]
-    ]:
+    ) -> Tuple[torch.FloatTensor, Optional[Tuple[torch.FloatTensor, torch.FloatTensor]]]:
         """
         Args:
             hidden_states (`torch.FloatTensor`): input to the layer of shape `(batch, seq_len, embed_dim)`
@@ -3057,15 +2651,10 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
         super().__init__(config)
         self.padding_idx = config.pad_token_id
         self.vocab_size = config.vocab_size
-        self.embed_tokens = nn.Embedding(
-            config.vocab_size, config.embedding_size, self.padding_idx
-        )
+        self.embed_tokens = nn.Embedding(config.vocab_size, config.embedding_size, self.padding_idx)
         # self.embed_tokens = nn.Embedding(config.vocab_size, config.embedding_size, self.padding_idx)
         self.layers = nn.ModuleList(
-            [
-                Gemma3WithTalkerTalkerDecoderLayer(config, layer_idx)
-                for layer_idx in range(config.num_hidden_layers)
-            ]
+            [Gemma3WithTalkerTalkerDecoderLayer(config, layer_idx) for layer_idx in range(config.num_hidden_layers)]
         )
         self._attn_implementation = config._attn_implementation
         self.norm = Qwen2RMSNorm(config.hidden_size, eps=config.rms_norm_eps)
@@ -3095,26 +2684,16 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
         return_dict: Optional[bool] = None,
         cache_position: Optional[torch.LongTensor] = None,
     ) -> Union[Tuple, BaseModelOutputWithPast]:
-        output_attentions = (
-            output_attentions
-            if output_attentions is not None
-            else self.config.output_attentions
-        )
+        output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
-            output_hidden_states
-            if output_hidden_states is not None
-            else self.config.output_hidden_states
+            output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         use_cache = use_cache if use_cache is not None else self.config.use_cache
 
-        return_dict = (
-            return_dict if return_dict is not None else self.config.use_return_dict
-        )
+        return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if (input_ids is None) ^ (inputs_embeds is not None):
-            raise ValueError(
-                "You must specify exactly one of input_ids or inputs_embeds"
-            )
+            raise ValueError("You must specify exactly one of input_ids or inputs_embeds")
 
         if self.gradient_checkpointing and self.training:
             if use_cache:
@@ -3131,9 +2710,7 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
             inputs_embeds = self.embed_tokens(input_ids)
 
         if cache_position is None:
-            past_seen_tokens = (
-                past_key_values.get_seq_length() if past_key_values is not None else 0
-            )
+            past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
             cache_position = torch.arange(
                 past_seen_tokens,
                 past_seen_tokens + inputs_embeds.shape[1],
@@ -3142,9 +2719,7 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
 
         # the hard coded `3` is for temporal, height and width.
         if position_ids is None:
-            position_ids = cache_position.view(1, 1, -1).expand(
-                3, inputs_embeds.shape[0], -1
-            )
+            position_ids = cache_position.view(1, 1, -1).expand(3, inputs_embeds.shape[0], -1)
         elif position_ids.dim() == 2:
             position_ids = position_ids[None, ...].expand(3, position_ids.shape[0], -1)
 
@@ -3211,11 +2786,7 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
         next_cache = next_decoder_cache if use_cache else None
 
         if not return_dict:
-            return tuple(
-                v
-                for v in [hidden_states, next_cache, all_hidden_states, all_self_attns]
-                if v is not None
-            )
+            return tuple(v for v in [hidden_states, next_cache, all_hidden_states, all_self_attns] if v is not None)
         return BaseModelOutputWithPast(
             last_hidden_state=hidden_states,
             past_key_values=next_cache,
@@ -3233,9 +2804,7 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
     ):
         if self.config._attn_implementation == "flash_attention_2":
             if attention_mask is not None and past_key_values is not None:
-                is_padding_right = (
-                    attention_mask[:, -1].sum().item() != input_tensor.size()[0]
-                )
+                is_padding_right = attention_mask[:, -1].sum().item() != input_tensor.size()[0]
                 if is_padding_right:
                     raise ValueError(
                         "You are attempting to perform batched generation with padding_side='right'"
@@ -3253,9 +2822,7 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
         # For SDPA, when possible, we will rely on its `is_causal` argument instead of its `attn_mask` argument, in
         # order to dispatch on Flash Attention 2. This feature is not compatible with static cache, as SDPA will fail
         # to infer the attention mask.
-        past_seen_tokens = (
-            past_key_values.get_seq_length() if past_key_values is not None else 0
-        )
+        past_seen_tokens = past_key_values.get_seq_length() if past_key_values is not None else 0
         using_static_cache = isinstance(past_key_values, StaticCache)
         using_sliding_window_cache = isinstance(past_key_values, SlidingWindowCache)
 
@@ -3309,9 +2876,7 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
             # Attend to all tokens in fully masked rows in the causal_mask, for example the relevant first rows when
             # using left padding. This is required by F.scaled_dot_product_attention memory-efficient attention path.
             # Details: https://github.com/pytorch/pytorch/issues/110213
-            causal_mask = AttentionMaskConverter._unmask_unattended(
-                causal_mask, min_dtype
-            )
+            causal_mask = AttentionMaskConverter._unmask_unattended(causal_mask, min_dtype)
 
         return causal_mask
 
@@ -3359,40 +2924,32 @@ class Gemma3WithTalkerTalkerModel(Gemma3WithTalkerPreTrainedModel):
                 dtype=dtype,
                 device=cache_position.device,
             )
-            diagonal_attend_mask = torch.arange(
-                target_length, device=cache_position.device
-            ) > cache_position.reshape(-1, 1)
+            diagonal_attend_mask = torch.arange(target_length, device=cache_position.device) > cache_position.reshape(
+                -1, 1
+            )
             text_config = config.get_text_config()
-            if (
-                getattr(text_config, "use_sliding_window", True)
-                and text_config.sliding_window is not None
-            ):
+            if getattr(text_config, "use_sliding_window", True) and text_config.sliding_window is not None:
                 # if we have sliding window, we should not attend to tokens beyond sliding window length, so we mask them out also
                 # the check is needed to verify is current checkpoint was trained with sliding window or not
-                if (
-                    not isinstance(past_key_values, SlidingWindowCache)
-                    or sequence_length > target_length
-                ):
-                    sliding_attend_mask = torch.arange(
-                        target_length, device=cache_position.device
-                    ) <= (cache_position.reshape(-1, 1) - text_config.sliding_window)
+                if not isinstance(past_key_values, SlidingWindowCache) or sequence_length > target_length:
+                    sliding_attend_mask = torch.arange(target_length, device=cache_position.device) <= (
+                        cache_position.reshape(-1, 1) - text_config.sliding_window
+                    )
                     diagonal_attend_mask.bitwise_or_(sliding_attend_mask)
             causal_mask *= diagonal_attend_mask
             causal_mask = causal_mask[None, None, :, :].expand(batch_size, 1, -1, -1)
             if attention_mask is not None:
-                causal_mask = (
-                    causal_mask.clone()
-                )  # copy to contiguous memory for in-place edit
+                causal_mask = causal_mask.clone()  # copy to contiguous memory for in-place edit
                 if attention_mask.shape[-1] > target_length:
                     attention_mask = attention_mask[:, :target_length]
                 mask_length = attention_mask.shape[-1]
-                padding_mask = causal_mask[:, :, :, :mask_length] + attention_mask[
-                    :, None, None, :
-                ].to(causal_mask.device)
+                padding_mask = causal_mask[:, :, :, :mask_length] + attention_mask[:, None, None, :].to(
+                    causal_mask.device
+                )
                 padding_mask = padding_mask == 0
-                causal_mask[:, :, :, :mask_length] = causal_mask[
-                    :, :, :, :mask_length
-                ].masked_fill(padding_mask, min_dtype)
+                causal_mask[:, :, :, :mask_length] = causal_mask[:, :, :, :mask_length].masked_fill(
+                    padding_mask, min_dtype
+                )
         return causal_mask
 
 
@@ -3413,11 +2970,7 @@ class Gemma3WithTalkerDiTRotaryEmbedding(nn.Module):
         batch_size, seq_len = x.shape[0], x.shape[1]
         t = torch.arange(seq_len, device=x.device)
         device_type = x.device.type
-        device_type = (
-            device_type
-            if isinstance(device_type, str) and device_type != "mps"
-            else "cpu"
-        )
+        device_type = device_type if isinstance(device_type, str) and device_type != "mps" else "cpu"
         with torch.autocast(device_type=device_type, enabled=False):
             freqs = t.unsqueeze(1).float() @ self.inv_freq.unsqueeze(0).float()
             freqs = torch.stack((freqs, freqs), dim=-1)
@@ -3568,9 +3121,7 @@ class AttentiveStatisticsPooling(nn.Module):
 
     def _compute_statistics(self, x, m, dim=2):
         mean = (m * x).sum(dim)
-        std = torch.sqrt(
-            (m * (x - mean.unsqueeze(dim)).pow(2)).sum(dim).clamp(self.eps)
-        )
+        std = torch.sqrt((m * (x - mean.unsqueeze(dim)).pow(2)).sum(dim).clamp(self.eps))
         return mean, std
 
     def forward(self, hidden_states):
@@ -3632,9 +3183,7 @@ class SqueezeExcitationRes2NetBlock(nn.Module):
             kernel_size=1,
             dilation=1,
         )
-        self.res2net_block = Res2NetBlock(
-            out_channels, out_channels, res2net_scale, kernel_size, dilation
-        )
+        self.res2net_block = Res2NetBlock(out_channels, out_channels, res2net_scale, kernel_size, dilation)
         self.tdnn2 = TimeDelayNetBlock(
             out_channels,
             out_channels,
@@ -3662,12 +3211,10 @@ class ECAPA_TimeDelayNet(torch.nn.Module):
 
     def __init__(self, config: Gemma3WithTalkerDiTConfig):
         super().__init__()
-        if len(config.enc_channels) != len(config.enc_kernel_sizes) or len(
-            config.enc_channels
-        ) != len(config.enc_dilations):
-            raise ValueError(
-                "enc_channels, enc_kernel_sizes and enc_dilations should have same length"
-            )
+        if len(config.enc_channels) != len(config.enc_kernel_sizes) or len(config.enc_channels) != len(
+            config.enc_dilations
+        ):
+            raise ValueError("enc_channels, enc_kernel_sizes and enc_dilations should have same length")
         self.channels = config.enc_channels
         self.blocks = nn.ModuleList()
 
@@ -3761,26 +3308,14 @@ class DiTInputEmbedding(nn.Module):
     ):
         if apply_cfg:
             hidden_states = torch.cat([hidden_states, hidden_states], dim=0)
-            speaker_embedding = torch.cat(
-                [speaker_embedding, torch.zeros_like(speaker_embedding)], dim=0
-            )
-            condition_vector = torch.cat(
-                [condition_vector, torch.zeros_like(condition_vector)], dim=0
-            )
+            speaker_embedding = torch.cat([speaker_embedding, torch.zeros_like(speaker_embedding)], dim=0)
+            condition_vector = torch.cat([condition_vector, torch.zeros_like(condition_vector)], dim=0)
             code_embed = torch.cat([code_embed, code_embed_uncond], dim=0)
         elif drop_audio_cond:  # cfg for cond audio
             condition_vector = torch.zeros_like(condition_vector)
             speaker_embedding = torch.zeros_like(speaker_embedding)
-        condition_vector = (
-            self.spk_encoder(condition_vector)
-            .unsqueeze(1)
-            .repeat(1, hidden_states.size(1), 1)
-        )
-        hidden_states = self.proj(
-            torch.cat(
-                (hidden_states, condition_vector, code_embed, speaker_embedding), dim=-1
-            )
-        )
+        condition_vector = self.spk_encoder(condition_vector).unsqueeze(1).repeat(1, hidden_states.size(1), 1)
+        hidden_states = self.proj(torch.cat((hidden_states, condition_vector, code_embed, speaker_embedding), dim=-1))
 
         return hidden_states
 
@@ -3814,13 +3349,9 @@ class Gemma3WithTalkerAdaLayerNormZero(nn.Module):
 
     def forward(self, hidden_states, emb=None):
         emb = self.linear(self.silu(emb))
-        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = torch.chunk(
-            emb, 6, dim=1
-        )
+        shift_msa, scale_msa, gate_msa, shift_mlp, scale_mlp, gate_mlp = torch.chunk(emb, 6, dim=1)
 
-        hidden_states = (
-            self.norm(hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
-        )
+        hidden_states = self.norm(hidden_states) * (1 + scale_msa[:, None]) + shift_msa[:, None]
         return hidden_states, gate_msa, shift_mlp, scale_mlp, gate_mlp
 
 
@@ -3839,9 +3370,7 @@ class Gemma3WithTalkerAdaLayerNormZero_Final(nn.Module):
         emb = self.linear(self.silu(emb))
         scale, shift = torch.chunk(emb, 2, dim=1)
 
-        hidden_states = (
-            self.norm(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
-        )
+        hidden_states = self.norm(hidden_states) * (1 + scale)[:, None, :] + shift[:, None, :]
         return hidden_states
 
 
@@ -3882,9 +3411,7 @@ class DiTAttention(nn.Module):
         self.to_k = nn.Linear(config.hidden_size, self.inner_dim)
         self.to_v = nn.Linear(config.hidden_size, self.inner_dim)
 
-        self.to_out = nn.ModuleList(
-            [nn.Linear(self.inner_dim, config.hidden_size), nn.Dropout(config.dropout)]
-        )
+        self.to_out = nn.ModuleList([nn.Linear(self.inner_dim, config.hidden_size), nn.Dropout(config.dropout)])
 
     def forward(
         self,
@@ -3909,9 +3436,7 @@ class DiTAttention(nn.Module):
         # apply rotary position embedding
         # Due to training process, only first head is applied with RoPE, will be fixed at next release
         cos, sin = position_embeddings
-        query[:, :1], key[:, :1] = apply_rotary_pos_emb(
-            query[:, :1], key[:, :1], cos, sin
-        )
+        query[:, :1], key[:, :1] = apply_rotary_pos_emb(query[:, :1], key[:, :1], cos, sin)
 
         attention_interface = ALL_ATTENTION_FUNCTIONS[self._attn_implementation]
         attention_weights, _ = attention_interface(
@@ -3924,9 +3449,7 @@ class DiTAttention(nn.Module):
         )
 
         # mask. e.g. inference got a batch with different target durations, mask out the padding
-        attention_weights = attention_weights.reshape(
-            batch_size, -1, self.heads * head_dim
-        )
+        attention_weights = attention_weights.reshape(batch_size, -1, self.heads * head_dim)
         attention_weights = attention_weights.to(query.dtype)
 
         # linear proj
@@ -3956,9 +3479,7 @@ class DiTTimestepEmbedding(nn.Module):
     def __init__(self, dim, freq_embed_dim=256):
         super().__init__()
         self.time_embed = SinusPositionEmbedding(freq_embed_dim)
-        self.time_mlp = nn.ModuleList(
-            [nn.Linear(freq_embed_dim, dim), nn.SiLU(), nn.Linear(dim, dim)]
-        )
+        self.time_mlp = nn.ModuleList([nn.Linear(freq_embed_dim, dim), nn.SiLU(), nn.Linear(dim, dim)])
 
     def forward(self, timestep):  # noqa: F821
         time_hidden = self.time_embed(timestep)
@@ -3981,20 +3502,14 @@ class DiTDecoderLayer(nn.Module):
         self.attn = DiTAttention(config)
         self.look_ahead_block = look_ahead_block
         self.look_backward_block = look_backward_block
-        self.ff_norm = nn.LayerNorm(
-            config.hidden_size, elementwise_affine=False, eps=1e-6
-        )
-        self.ff = DiTMLP(
-            dim=config.hidden_size, mult=config.ff_mult, dropout=config.dropout
-        )
+        self.ff_norm = nn.LayerNorm(config.hidden_size, elementwise_affine=False, eps=1e-6)
+        self.ff = DiTMLP(dim=config.hidden_size, mult=config.ff_mult, dropout=config.dropout)
 
     def forward(
         self, hidden_states, timestep, position_embeddings=None, block_diff=None
     ):  # x: noised input, t: time embedding
         # pre-norm & modulation for attention input
-        norm, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.attn_norm(
-            hidden_states, emb=timestep
-        )
+        norm, gate_msa, shift_mlp, scale_mlp, gate_mlp = self.attn_norm(hidden_states, emb=timestep)
 
         # attention
         attn_output = self.attn(
@@ -4007,9 +3522,7 @@ class DiTDecoderLayer(nn.Module):
         # process attention output for input x
         hidden_states = hidden_states + gate_msa.unsqueeze(1) * attn_output
 
-        norm = (
-            self.ff_norm(hidden_states) * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
-        )
+        norm = self.ff_norm(hidden_states) * (1 + scale_mlp[:, None]) + shift_mlp[:, None]
         ff_output = self.ff(norm)
         hidden_states = hidden_states + gate_mlp.unsqueeze(1) * ff_output
 
@@ -4050,9 +3563,9 @@ class SnakeBeta(nn.Module):
         beta = self.beta.unsqueeze(0).unsqueeze(-1)
         alpha = torch.exp(alpha)
         beta = torch.exp(beta)
-        hidden_states = hidden_states + (
-            1.0 / (beta + self.no_div_by_zero)
-        ) * torch.pow(torch.sin(hidden_states * alpha), 2)
+        hidden_states = hidden_states + (1.0 / (beta + self.no_div_by_zero)) * torch.pow(
+            torch.sin(hidden_states * alpha), 2
+        )
 
         return hidden_states
 
@@ -4082,9 +3595,7 @@ def kaiser_sinc_filter1d(cutoff, half_width, kernel_size):
     else:
         beta = 0.0
 
-    kaiser_window = torch.kaiser_window(
-        kernel_size, beta=beta, periodic=False, dtype=torch.float32
-    )
+    kaiser_window = torch.kaiser_window(kernel_size, beta=beta, periodic=False, dtype=torch.float32)
 
     # Compute time indices
     if is_even:
@@ -4094,9 +3605,7 @@ def kaiser_sinc_filter1d(cutoff, half_width, kernel_size):
 
     # Compute sinc filter
     if cutoff == 0:
-        return torch.zeros(
-            (1, 1, kernel_size), dtype=torch.float32
-        )  # Ensures correct shape
+        return torch.zeros((1, 1, kernel_size), dtype=torch.float32)  # Ensures correct shape
 
     sinc_filter = torch.sinc(2 * cutoff * time_indices)
     normalized_filter = 2 * cutoff * kaiser_window * sinc_filter
@@ -4111,19 +3620,13 @@ class UpSample1d(nn.Module):
     def __init__(self, ratio=2, kernel_size=None):
         super().__init__()
         self.ratio = ratio
-        self.kernel_size = (
-            int(6 * ratio // 2) * 2 if kernel_size is None else kernel_size
-        )
+        self.kernel_size = int(6 * ratio // 2) * 2 if kernel_size is None else kernel_size
         self.stride = ratio
         self.pad = self.kernel_size // ratio - 1
         self.pad_left = self.pad * self.stride + (self.kernel_size - self.stride) // 2
-        self.pad_right = (
-            self.pad * self.stride + (self.kernel_size - self.stride + 1) // 2
-        )
+        self.pad_right = self.pad * self.stride + (self.kernel_size - self.stride + 1) // 2
 
-        filter = kaiser_sinc_filter1d(
-            cutoff=0.5 / ratio, half_width=0.6 / ratio, kernel_size=self.kernel_size
-        )
+        filter = kaiser_sinc_filter1d(cutoff=0.5 / ratio, half_width=0.6 / ratio, kernel_size=self.kernel_size)
         self.register_buffer("filter", filter, persistent=False)
 
     def forward(self, hidden_states):
@@ -4161,9 +3664,7 @@ class DownSample1d(nn.Module):
 
     def forward(self, hidden_states):
         channels = hidden_states.shape[1]
-        hidden_states = F.pad(
-            hidden_states, (self.pad_left, self.pad_right), mode="replicate"
-        )
+        hidden_states = F.pad(hidden_states, (self.pad_left, self.pad_right), mode="replicate")
         out = F.conv1d(
             hidden_states,
             self.filter.expand(channels, -1, -1),
@@ -4264,15 +3765,10 @@ class AMPBlock(torch.nn.Module):
             ]
         )
 
-        self.num_layers = len(self.convs1) + len(
-            self.convs2
-        )  # total number of conv layers
+        self.num_layers = len(self.convs1) + len(self.convs2)  # total number of conv layers
 
         self.activations = nn.ModuleList(
-            [
-                TorchActivation1d(activation=SnakeBeta(channels))
-                for _ in range(self.num_layers)
-            ]
+            [TorchActivation1d(activation=SnakeBeta(channels)) for _ in range(self.num_layers)]
         )
 
     def _get_padding(self, kernel_size, dilation=1):
@@ -4304,9 +3800,7 @@ class Gemma3WithTalkerToken2WavBigVGANModel(Gemma3WithTalkerPreTrainedModel):
         self.num_residual_blocks = len(config.resblock_kernel_sizes)
         self.num_upsample_layers = len(config.upsample_rates)
 
-        self.conv_pre = nn.Conv1d(
-            config.mel_dim, config.upsample_initial_channel, 7, 1, padding=3
-        )
+        self.conv_pre = nn.Conv1d(config.mel_dim, config.upsample_initial_channel, 7, 1, padding=3)
 
         # Removing extra ModuleList breaks official state dict
         ups = [
@@ -4321,9 +3815,7 @@ class Gemma3WithTalkerToken2WavBigVGANModel(Gemma3WithTalkerPreTrainedModel):
                     )
                 ]
             )
-            for layer_idx, (stride, kernel_size) in enumerate(
-                zip(config.upsample_rates, config.upsample_kernel_sizes)
-            )
+            for layer_idx, (stride, kernel_size) in enumerate(zip(config.upsample_rates, config.upsample_kernel_sizes))
         ]
         self.ups = nn.ModuleList(ups)
 
@@ -4335,16 +3827,12 @@ class Gemma3WithTalkerToken2WavBigVGANModel(Gemma3WithTalkerPreTrainedModel):
                     dilation,
                 )
                 for layer_idx in range(self.num_upsample_layers)
-                for kernel_size, dilation in zip(
-                    config.resblock_kernel_sizes, config.resblock_dilation_sizes
-                )
+                for kernel_size, dilation in zip(config.resblock_kernel_sizes, config.resblock_dilation_sizes)
             ]
         )
 
         self.activation_post = TorchActivation1d(
-            activation=SnakeBeta(
-                config.upsample_initial_channel // (2**self.num_upsample_layers)
-            )
+            activation=SnakeBeta(config.upsample_initial_channel // (2**self.num_upsample_layers))
         )
         self.conv_post = nn.Conv1d(
             config.upsample_initial_channel // (2**self.num_upsample_layers),
@@ -4384,9 +3872,7 @@ class Gemma3WithTalkerToken2WavBigVGANModel(Gemma3WithTalkerPreTrainedModel):
         for layer_index in range(self.num_upsample_layers):
             hidden_representation = self.ups[layer_index][0](hidden_representation)
             residual_output = sum(
-                self.resblocks[layer_index * self.num_residual_blocks + block_index](
-                    hidden_representation
-                )
+                self.resblocks[layer_index * self.num_residual_blocks + block_index](hidden_representation)
                 for block_index in range(self.num_residual_blocks)
             )
             residual_output = residual_output / self.num_residual_blocks
@@ -4414,11 +3900,7 @@ class RungeKutta4ODESolver:
         value_start,
         function_value_start=None,
     ):
-        k1 = (
-            function_value_start
-            if function_value_start is not None
-            else function(time_start, value_start)
-        )
+        k1 = function_value_start if function_value_start is not None else function(time_start, value_start)
         k2 = function(
             time_start + time_step * self._one_third,
             value_start + time_step * k1 * self._one_third,
@@ -4444,9 +3926,7 @@ class RungeKutta4ODESolver:
             function_value_start,
         )
 
-    def _linear_interpolation(
-        self, time_start, time_end, value_start, value_end, time_point
-    ):
+    def _linear_interpolation(self, time_start, time_end, value_start, value_end, time_point):
         if time_point == time_start:
             return value_start
         if time_point == time_end:
@@ -4467,15 +3947,10 @@ class RungeKutta4ODESolver:
         current_value = self.initial_value
         for time_start, time_end in zip(time_points[:-1], time_points[1:]):
             time_step = time_end - time_start
-            delta_value, _ = self._compute_step(
-                self.function, time_start, time_step, time_end, current_value
-            )
+            delta_value, _ = self._compute_step(self.function, time_start, time_step, time_end, current_value)
             next_value = current_value + delta_value
 
-            while (
-                current_index < len(time_points)
-                and time_end >= time_points[current_index]
-            ):
+            while current_index < len(time_points) and time_end >= time_points[current_index]:
                 solution[current_index] = self._linear_interpolation(
                     time_start,
                     time_end,
@@ -4505,9 +3980,7 @@ class Gemma3WithTalkerToken2WavDiTModel(Gemma3WithTalkerPreTrainedModel):
         self.repeats = config.repeats
         self.time_embed = DiTTimestepEmbedding(config.hidden_size)
 
-        self.text_embed = DiTCodecEmbedding(
-            config.num_embeds, config.emb_dim, config.repeats
-        )
+        self.text_embed = DiTCodecEmbedding(config.num_embeds, config.emb_dim, config.repeats)
         self.input_embed = DiTInputEmbedding(config)
 
         self.rotary_embed = Gemma3WithTalkerDiTRotaryEmbedding(config.head_dim)
@@ -4527,16 +4000,12 @@ class Gemma3WithTalkerToken2WavDiTModel(Gemma3WithTalkerPreTrainedModel):
                 )
             )
 
-        self.norm_out = Gemma3WithTalkerAdaLayerNormZero_Final(
-            config.hidden_size
-        )  # final modulation
+        self.norm_out = Gemma3WithTalkerAdaLayerNormZero_Final(config.hidden_size)  # final modulation
         self.proj_out = nn.Linear(config.hidden_size, config.mel_dim)
 
     def _create_block_diff(self, hidden_states):
         batch, seq_len = hidden_states.shape[0], hidden_states.shape[1]
-        block_indices = (
-            torch.arange(seq_len, device=hidden_states.device) // self.block_size
-        )  # [seq_length]
+        block_indices = torch.arange(seq_len, device=hidden_states.device) // self.block_size  # [seq_length]
 
         block_i = block_indices.unsqueeze(1)  # [seq_length, 1]
         block_j = block_indices.unsqueeze(0)  # [1, seq_length]
@@ -4561,12 +4030,8 @@ class Gemma3WithTalkerToken2WavDiTModel(Gemma3WithTalkerPreTrainedModel):
 
         # Compute embeddings
         time_embedding = self.time_embed(time_step)
-        text_embedding = self.text_embed(
-            quantized_code, drop_code=False if apply_cfg else drop_code
-        )
-        text_embedding_unconditioned = (
-            self.text_embed(quantized_code, drop_code=True) if apply_cfg else None
-        )
+        text_embedding = self.text_embed(quantized_code, drop_code=False if apply_cfg else drop_code)
+        text_embedding_unconditioned = self.text_embed(quantized_code, drop_code=True) if apply_cfg else None
 
         hidden_states = self.input_embed(
             hidden_states,
@@ -4606,17 +4071,11 @@ class Gemma3WithTalkerToken2WavDiTModel(Gemma3WithTalkerPreTrainedModel):
         guidance_scale=0.5,
         sway_coefficient=-1.0,
     ):
-        noise_initialization = torch.randn(
-            [1, 30000, self.mel_dim], dtype=reference_mel_spectrogram.dtype
-        )
+        noise_initialization = torch.randn([1, 30000, self.mel_dim], dtype=reference_mel_spectrogram.dtype)
         maximum_duration = quantized_code.shape[1] * self.repeats
-        initial_state = noise_initialization[:, :maximum_duration].to(
-            quantized_code.device
-        )
+        initial_state = noise_initialization[:, :maximum_duration].to(quantized_code.device)
         batch_size = reference_mel_spectrogram.shape[0]
-        conditioning_vector = conditioning_vector.unsqueeze(1).repeat(
-            1, maximum_duration, 1
-        )
+        conditioning_vector = conditioning_vector.unsqueeze(1).repeat(1, maximum_duration, 1)
 
         if batch_size != 1:
             raise ValueError("Only batch size = 1 is currently supported")
@@ -4643,10 +4102,7 @@ class Gemma3WithTalkerToken2WavDiTModel(Gemma3WithTalkerPreTrainedModel):
                 apply_cfg=True,
             )
             guided_prediction, null_prediction = torch.chunk(model_output, 2, dim=0)
-            return (
-                guided_prediction
-                + (guided_prediction - null_prediction) * guidance_scale
-            )
+            return guided_prediction + (guided_prediction - null_prediction) * guidance_scale
 
         initial_time = 0
         time_embedding = torch.linspace(
@@ -4658,13 +4114,9 @@ class Gemma3WithTalkerToken2WavDiTModel(Gemma3WithTalkerPreTrainedModel):
         )
 
         if sway_coefficient is not None:
-            time_embedding += sway_coefficient * (
-                torch.cos(torch.pi / 2 * time_embedding) - 1 + time_embedding
-            )
+            time_embedding += sway_coefficient * (torch.cos(torch.pi / 2 * time_embedding) - 1 + time_embedding)
 
-        ode_solver = RungeKutta4ODESolver(
-            function=ode_function, initial_value=initial_state
-        )
+        ode_solver = RungeKutta4ODESolver(function=ode_function, initial_value=initial_state)
         solution_trajectory = ode_solver.integrate(time_embedding)
 
         generated_waveform = solution_trajectory[-1]
@@ -4702,10 +4154,8 @@ class Gemma3WithTalkerToken2WavModel(Gemma3WithTalkerPreTrainedModel):
         self.code2wav_dit_model = Gemma3WithTalkerToken2WavDiTModel._from_config(
             config.dit_config, attn_implementation=attn_impl
         )
-        self.code2wav_bigvgan_model = (
-            Gemma3WithTalkerToken2WavBigVGANModel._from_config(
-                config.bigvgan_config, attn_implementation=attn_impl
-            )
+        self.code2wav_bigvgan_model = Gemma3WithTalkerToken2WavBigVGANModel._from_config(
+            config.bigvgan_config, attn_implementation=attn_impl
         )
 
     def forward(
@@ -4750,18 +4200,14 @@ class Gemma3WithTalkerToken2WavModel(Gemma3WithTalkerPreTrainedModel):
 #     a DiT model take speech tokens as input and predict mel spectrogram and a BigVGAN vocoder take mel spectrogram as input and predict waveform.
 #     """
 # )
-class Gemma3WithTalkerForConditionalGeneration(
-    Gemma3WithTalkerPreTrainedModel, GenerationMixin
-):
+class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, GenerationMixin):
     config_class = Gemma3WithTalkerConfig
 
     def __init__(self, config):
         super().__init__(config)
         logger.debug("Inside conditional generation and config is %s", config)
 
-        self.thinker = Gemma3WithTalkerThinkerForConditionalGeneration(
-            config.thinker_config
-        )
+        self.thinker = Gemma3WithTalkerThinkerForConditionalGeneration(config.thinker_config)
 
         self.has_talker = config.enable_audio_output
         self.speaker_map = {}
@@ -4771,12 +4217,8 @@ class Gemma3WithTalkerForConditionalGeneration(
 
         self.projection_thinker_L0 = nn.Linear(thinker_hidden_dim, talker_expected_dim)
         self.projection_thinker_LN = nn.Linear(thinker_hidden_dim, talker_expected_dim)
-        self.projection_thinker_vocab = nn.Linear(
-            thinker_hidden_dim, talker_expected_dim
-        )
-        logger.info(
-            f"Initialized projection layers: L0, LN, Vocab from {thinker_hidden_dim} to {talker_expected_dim}"
-        )
+        self.projection_thinker_vocab = nn.Linear(thinker_hidden_dim, talker_expected_dim)
+        logger.info(f"Initialized projection layers: L0, LN, Vocab from {thinker_hidden_dim} to {talker_expected_dim}")
 
         # Mark them for potential special initialization (though not strictly necessary with current _init_weights)
         # self.projection_thinker_L0._is_projection_layer = True
@@ -4788,9 +4230,7 @@ class Gemma3WithTalkerForConditionalGeneration(
         self.post_init()
 
     def enable_talker(self):
-        self.talker = Gemma3WithTalkerTalkerForConditionalGeneration(
-            self.config.talker_config
-        )
+        self.talker = Gemma3WithTalkerTalkerForConditionalGeneration(self.config.talker_config)
         self.token2wav = Gemma3WithTalkerToken2WavModel(self.config.token2wav_config)
         self.token2wav.float()
         self.has_talker = True
@@ -4807,6 +4247,21 @@ class Gemma3WithTalkerForConditionalGeneration(
         if hasattr(self, "token2wav"):
             del self.token2wav
         self.has_talker = False
+
+    def discriminator_loss(
+        self, disc_real_outputs: List[torch.Tensor], disc_generated_outputs: List[torch.Tensor]
+    ) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
+        loss = 0
+        r_losses = []
+        g_losses = []
+        for dr, dg in zip(disc_real_outputs, disc_generated_outputs):
+            r_loss = torch.mean((1 - dr) ** 2)
+            g_loss = torch.mean(dg**2)
+            loss += r_loss + g_loss
+            r_losses.append(r_loss.item())
+            g_losses.append(g_loss.item())
+
+        return loss, r_losses, g_losses
 
     @classmethod
     def from_pretrained(
@@ -4857,9 +4312,7 @@ class Gemma3WithTalkerForConditionalGeneration(
             revision=kwargs.pop("revision", None),
         )
         if spk_path is None:
-            raise ValueError(
-                f"""{pretrained_model_name_or_path}/{spk_path} not exists"""
-            )
+            raise ValueError(f"""{pretrained_model_name_or_path}/{spk_path} not exists""")
         model.load_speakers(spk_path)
 
         return model
@@ -4903,9 +4356,7 @@ class Gemma3WithTalkerForConditionalGeneration(
                 - **Audio waveform** (`torch.Tensor`): Generated audio waveform.
         """
         if speaker not in self.speaker_map:
-            raise ValueError(
-                f"{speaker} is not available, available speakers: {self.speaker_map.keys()}"
-            )
+            raise ValueError(f"{speaker} is not available, available speakers: {self.speaker_map.keys()}")
         if return_audio and not self.has_talker:
             raise ValueError(
                 "Cannot use talker when talker module not initialized. Use `enable_talker` method or set enable_talker in config to enable talker."
@@ -4913,9 +4364,7 @@ class Gemma3WithTalkerForConditionalGeneration(
         if return_audio is None:
             return_audio = self.has_talker
         if input_ids.shape[0] != 1 and return_audio:
-            raise NotImplementedError(
-                "Gemma3Talker currently does not support batched inference with audio output"
-            )
+            raise NotImplementedError("Gemma3Talker currently does not support batched inference with audio output")
 
         # shared_kwargs = {"use_audio_in_video": use_audio_in_video}
         thinker_kwargs = {
@@ -4972,17 +4421,11 @@ class Gemma3WithTalkerForConditionalGeneration(
             return thinker_result
 
         # 2. Generate speech tokens from talker module
-        embeds_to_talker = (
-            thinker_result.hidden_states[0][0].clone().to(self.talker.device)
-        )
+        embeds_to_talker = thinker_result.hidden_states[0][0].clone().to(self.talker.device)
 
         if thinker_kwargs.get("input_features", None) is not None:
             audio_ids_mask = input_ids == self.config.thinker_config.audio_token_index
-            audio_mask = (
-                audio_ids_mask.unsqueeze(-1)
-                .expand_as(embeds_to_talker)
-                .to(embeds_to_talker.device)
-            )
+            audio_mask = audio_ids_mask.unsqueeze(-1).expand_as(embeds_to_talker).to(embeds_to_talker.device)
             audio_mask_tensor = torch.zeros(
                 [audio_ids_mask.sum(), embeds_to_talker.shape[-1]],
                 dtype=embeds_to_talker.dtype,
@@ -4991,11 +4434,7 @@ class Gemma3WithTalkerForConditionalGeneration(
             embeds_to_talker.masked_scatter_(audio_mask, audio_mask_tensor)
         if thinker_kwargs.get("pixel_values", None) is not None:
             image_ids_mask = input_ids == self.config.thinker_config.image_token_index
-            image_mask = (
-                image_ids_mask.unsqueeze(-1)
-                .expand_as(embeds_to_talker)
-                .to(embeds_to_talker.device)
-            )
+            image_mask = image_ids_mask.unsqueeze(-1).expand_as(embeds_to_talker).to(embeds_to_talker.device)
             image_mask_tensor = torch.zeros(
                 [image_ids_mask.sum(), embeds_to_talker.shape[-1]],
                 dtype=embeds_to_talker.dtype,
@@ -5004,11 +4443,7 @@ class Gemma3WithTalkerForConditionalGeneration(
             embeds_to_talker.masked_scatter_(image_mask, image_mask_tensor)
         if thinker_kwargs.get("pixel_values_videos", None) is not None:
             video_ids_mask = input_ids == self.config.thinker_config.video_token_index
-            video_mask = (
-                video_ids_mask.unsqueeze(-1)
-                .expand_as(embeds_to_talker)
-                .to(embeds_to_talker.device)
-            )
+            video_mask = video_ids_mask.unsqueeze(-1).expand_as(embeds_to_talker).to(embeds_to_talker.device)
             video_mask_tensor = torch.zeros(
                 [video_ids_mask.sum(), embeds_to_talker.shape[-1]],
                 dtype=embeds_to_talker.dtype,
@@ -5035,9 +4470,7 @@ class Gemma3WithTalkerForConditionalGeneration(
         # thinker_generate_ids = thinker_result.sequences[:, input_ids.size(1) :].to(
         #     self.talker.device
         # )
-        thinker_generate_ids = thinker_result.sequences[:, input_ids.size(1) :].to(
-            self.talker.device
-        )
+        thinker_generate_ids = thinker_result.sequences[:, input_ids.size(1) :].to(self.talker.device)
 
         talker_text_bos_token = speaker_params["bos_token"]
         talker_input_text_ids = torch.cat(
@@ -5075,19 +4508,11 @@ class Gemma3WithTalkerForConditionalGeneration(
         )
 
         thinker_embed_tokens = self.thinker.get_input_embeddings()
-        thinker_reply_part = torch.cat(thinker_hidden_states[1:], dim=1) + torch.cat(
-            thinker_token_embeds[1:], dim=1
-        )
+        thinker_reply_part = torch.cat(thinker_hidden_states[1:], dim=1) + torch.cat(thinker_token_embeds[1:], dim=1)
         talker_inputs_embeds = thinker_hidden_states[0] + thinker_token_embeds[0]
-        talker_text_bos_token = torch.tensor(
-            [[talker_text_bos_token]], dtype=torch.long, device=self.thinker.device
-        )
-        talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token).to(
-            self.talker.device
-        )
-        talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed).to(
-            self.talker.device
-        )
+        talker_text_bos_token = torch.tensor([[talker_text_bos_token]], dtype=torch.long, device=self.thinker.device)
+        talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token).to(self.talker.device)
+        talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed).to(self.talker.device)
         talker_inputs_embeds = torch.cat(
             [
                 talker_inputs_embeds,
@@ -5104,9 +4529,7 @@ class Gemma3WithTalkerForConditionalGeneration(
                 device=self.thinker.device,
             )
         ).to(self.talker.device)
-        eos_embedding = self.projection_thinker_vocab(eos_embedding).to(
-            self.talker.device
-        )
+        eos_embedding = self.projection_thinker_vocab(eos_embedding).to(self.talker.device)
 
         pad_embedding = thinker_embed_tokens(
             torch.tensor(
@@ -5115,9 +4538,7 @@ class Gemma3WithTalkerForConditionalGeneration(
                 device=self.thinker.device,
             )
         ).to(self.talker.device)
-        pad_embedding = self.projection_thinker_vocab(pad_embedding).to(
-            self.talker.device
-        )
+        pad_embedding = self.projection_thinker_vocab(pad_embedding).to(self.talker.device)
 
         thinker_reply_part = torch.cat(
             [
@@ -5142,10 +4563,7 @@ class Gemma3WithTalkerForConditionalGeneration(
             inputs_embeds=talker_inputs_embeds,
             attention_mask=talker_attention_mask,
             suppress_tokens=[self.talker.codec_bos_token],
-            **{
-                k: (v.to(self.talker.device) if torch.is_tensor(v) else v)
-                for k, v in talker_kwargs.items()
-            },
+            **{k: (v.to(self.talker.device) if torch.is_tensor(v) else v) for k, v in talker_kwargs.items()},
         )
         talker_generate_codes = talker_result[:, talker_input_ids.shape[1] : -1]
 
@@ -5161,6 +4579,226 @@ class Gemma3WithTalkerForConditionalGeneration(
         )
 
         return thinker_result.sequences, wav.float()
+
+    def forward(
+        self,
+        input_ids=None,
+        pixel_values: torch.FloatTensor = None,
+        attention_mask: Optional[torch.Tensor] = None,
+        position_ids: Optional[torch.LongTensor] = None,
+        past_key_values: Optional[Union[List[torch.FloatTensor], Cache]] = None,
+        token_type_ids: Optional[torch.LongTensor] = None,
+        cache_position: Optional[torch.LongTensor] = None,
+        inputs_embeds: Optional[torch.FloatTensor] = None,
+        thinker_labels: Optional[torch.LongTensor] = None,
+        use_cache: Optional[bool] = None,
+        output_attentions: Optional[bool] = None,
+        output_hidden_states: Optional[bool] = None,
+        return_dict: Optional[bool] = None,
+        logits_to_keep: Union[int, torch.Tensor] = 0,
+        # Talker args
+        talker_input_ids=None,
+        talker_attention_mask=None,
+        talker_position_ids=None,
+        talker_past_key_values=None,
+        thinker_reply_part: Optional[torch.FloatTensor] = None,
+        talker_inputs_embeds: Optional[torch.FloatTensor] = None,
+        rope_deltas: Optional[torch.LongTensor] = None,
+        talker_cache_position: Optional[torch.LongTensor] = None,
+        input_text_ids: Optional[torch.LongTensor] = None,
+        image_grid_thw: Optional[torch.LongTensor] = None,
+        video_grid_thw: Optional[torch.LongTensor] = None,
+        use_audio_in_video: Optional[bool] = None,
+        audio_feature_lengths: Optional[torch.LongTensor] = None,
+        video_second_per_grid: Optional[torch.LongTensor] = None,
+        # Token2wav
+        speaker_parm_bos=None,
+        speaker_parm_cond=None,
+        speaker_parm_ref=None,
+        wave_label=None,
+        **kwargs,
+    ):
+        """
+        Forward pass for training the Gemma3WithTalker model.
+        Returns:
+            A tuple or dictionary containing the loss and other outputs
+        """
+        # Process thinker inputs
+        thinker_outputs = self.thinker(
+            input_ids=input_ids,
+            pixel_values=pixel_values,
+            token_type_ids=token_type_ids,
+            attention_mask=attention_mask,
+            position_ids=position_ids,
+            past_key_values=past_key_values,
+            inputs_embeds=inputs_embeds,
+            use_cache=use_cache,
+            labels=thinker_labels,
+            output_attentions=output_attentions,
+            output_hidden_states=output_hidden_states,
+            return_dict=return_dict,
+            cache_position=cache_position,
+            logits_to_keep=logits_to_keep,
+            **kwargs,
+        )
+
+        thinker_loss = thinker_outputs.loss
+
+        # Process thinker hidden states for talker input
+        if self.has_talker:
+            # Get hidden states from thinker
+            thinker_hidden_states = thinker_outputs.hidden_states
+
+            # Project hidden states using projection layers
+            embeds_to_talker = thinker_hidden_states[0][0].clone()
+
+            # Handle special tokens (similar to generate method)
+            if pixel_values is not None:
+                image_ids_mask = input_ids == self.config.thinker_config.image_token_index
+                image_mask = image_ids_mask.unsqueeze(-1).expand_as(embeds_to_talker)
+                image_mask_tensor = torch.zeros(
+                    [image_ids_mask.sum(), embeds_to_talker.shape[-1]],
+                    dtype=embeds_to_talker.dtype,
+                    device=embeds_to_talker.device,
+                )
+                embeds_to_talker.masked_scatter_(image_mask, image_mask_tensor)
+
+            # Process hidden states
+            processed_thinker_hidden = ((embeds_to_talker,) + thinker_hidden_states[0][1:],) + thinker_hidden_states[
+                1:
+            ]
+
+            # Apply projections
+            thinker_token_embeds = [
+                self.projection_thinker_L0(token_hidden_states[0]) for token_hidden_states in processed_thinker_hidden
+            ]
+            thinker_hidden_states = [
+                self.projection_thinker_LN(token_hidden_states[-1]) for token_hidden_states in processed_thinker_hidden
+            ]
+
+            talker_text_bos_token = speaker_parm_bos
+            talker_input_ids = torch.cat(
+                [
+                    torch.full_like(
+                        input_ids,
+                        fill_value=self.talker.codec_mask_token,
+                    ),
+                    torch.tensor(
+                        [[self.talker.codec_pad_token]],
+                        dtype=torch.long,
+                    ),
+                    torch.tensor(
+                        [[self.talker.codec_bos_token]],
+                        dtype=torch.long,
+                    ),
+                ],
+                dim=1,
+            )
+            thinker_embed_tokens = self.thinker.get_input_embeddings()
+            talker_text_bos_token = torch.tensor([[talker_text_bos_token]], dtype=torch.long)
+            talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token)
+            talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed)
+
+            # Prepare talker inputs
+            talker_inputs_embeds = thinker_hidden_states[0] + thinker_token_embeds[0]
+            thinker_reply_part = torch.cat(thinker_hidden_states[1:], dim=1) + torch.cat(
+                thinker_token_embeds[1:], dim=1
+            )
+            talker_inputs_embeds = torch.cat(
+                [
+                    talker_inputs_embeds,
+                    talker_text_bos_embed,
+                    thinker_reply_part[:, :1, :],
+                ],
+                dim=1,
+            )
+            eos_embedding = thinker_embed_tokens(
+                torch.tensor(
+                    [[self.talker.text_eos_token]],
+                    dtype=torch.long,
+                )
+            )
+            eos_embedding = self.projection_thinker_vocab(eos_embedding)
+
+            pad_embedding = thinker_embed_tokens(
+                torch.tensor(
+                    [[self.talker.text_pad_token]],
+                    dtype=torch.long,
+                )
+            )
+            pad_embedding = self.projection_thinker_vocab(pad_embedding)
+
+            thinker_reply_part = torch.cat(
+                [
+                    thinker_reply_part[:, 1:, :],
+                    eos_embedding,
+                    pad_embedding,
+                ],
+                dim=1,
+            )
+            # talker_attention_mask = None
+            # if "attention_mask" in kwargs:
+            #     talker_attention_mask = torch.cat(
+            #         [kwargs["attention_mask"], kwargs["attention_mask"].new_ones((1, 2))],
+            #         dim=1,
+            #     )
+
+            # Forward pass through talker
+            talker_outputs = self.talker(
+                input_ids=talker_input_ids,
+                attention_mask=talker_attention_mask,
+                position_ids=None,
+                past_key_values=talker_past_key_values,
+                thinker_reply_part=thinker_reply_part,
+                inputs_embeds=talker_inputs_embeds,
+                output_hidden_states=output_hidden_states,
+                return_dict=return_dict,
+            )
+
+            talker_loss = talker_outputs.loss
+            talker_result = talker_outputs.logits
+            talker_generate_codes = talker_result[:, talker_input_ids.shape[1] : -1]
+            wav = self.token2wav(
+                talker_generate_codes,
+                conditioning=speaker_parm_cond,
+                reference_mel=speaker_parm_ref,
+            )
+            wave_loss, r_loss, g_loss = self.discriminator_loss(wave_label, wav)
+
+            # Combine losses
+            total_loss = thinker_loss + talker_loss + wave_loss
+
+            if return_dict:
+                return {
+                    "loss": total_loss,
+                    "thinker_loss": thinker_loss,
+                    "talker_loss": talker_loss,
+                    "wave_loss": wave_loss,
+                    "thinker_logits": thinker_outputs.logits,
+                    "talker_logits": talker_outputs.logits,
+                    "thinker_hidden_states": thinker_outputs.hidden_states,
+                    "talker_hidden_states": talker_outputs.hidden_states,
+                }
+            else:
+                return (
+                    total_loss,
+                    thinker_loss,
+                    talker_loss,
+                    wave_loss,
+                    thinker_outputs.logits,
+                    talker_outputs.logits,
+                )
+        else:
+            # If talker is disabled, return only thinker outputs
+            if return_dict:
+                return {
+                    "loss": thinker_loss,
+                    "thinker_loss": thinker_loss,
+                    "thinker_logits": thinker_outputs.logits,
+                    "thinker_hidden_states": thinker_outputs.hidden_states,
+                }
+            else:
+                return (thinker_loss, thinker_outputs.logits)
 
 
 __all__ = [

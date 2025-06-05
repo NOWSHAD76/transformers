@@ -52,17 +52,34 @@ import torch.distributed as dist
 from huggingface_hub import ModelCard, create_repo, upload_folder
 from packaging import version
 from torch import nn
-from torch.utils.data import DataLoader, Dataset, IterableDataset, RandomSampler, SequentialSampler
+from torch.utils.data import (
+    DataLoader,
+    Dataset,
+    IterableDataset,
+    RandomSampler,
+    SequentialSampler,
+)
 
 from . import __version__
 from .configuration_utils import PretrainedConfig
-from .data.data_collator import DataCollator, DataCollatorWithPadding, default_data_collator
+from .data.data_collator import (
+    DataCollator,
+    DataCollatorWithPadding,
+    default_data_collator,
+)
 from .debug_utils import DebugOption, DebugUnderflowOverflow
 from .feature_extraction_sequence_utils import SequenceFeatureExtractor
 from .feature_extraction_utils import FeatureExtractionMixin
-from .hyperparameter_search import ALL_HYPERPARAMETER_SEARCH_BACKENDS, default_hp_search_backend
+from .hyperparameter_search import (
+    ALL_HYPERPARAMETER_SEARCH_BACKENDS,
+    default_hp_search_backend,
+)
 from .image_processing_utils import BaseImageProcessor
-from .integrations.deepspeed import deepspeed_init, deepspeed_load_checkpoint, is_deepspeed_available
+from .integrations.deepspeed import (
+    deepspeed_init,
+    deepspeed_load_checkpoint,
+    is_deepspeed_available,
+)
 from .integrations.tpu import tpu_spmd_dataloader
 from .modelcard import TrainingSummary
 from .modeling_utils import PreTrainedModel, load_sharded_checkpoint, unwrap_model
@@ -216,7 +233,12 @@ if is_sagemaker_mp_enabled():
 
     IS_SAGEMAKER_MP_POST_1_10 = version.parse(SMP_VERSION) >= version.parse("1.10")
 
-    from .trainer_pt_utils import smp_forward_backward, smp_forward_only, smp_gather, smp_nested_concat
+    from .trainer_pt_utils import (
+        smp_forward_backward,
+        smp_forward_only,
+        smp_gather,
+        smp_nested_concat,
+    )
 else:
     IS_SAGEMAKER_MP_POST_1_10 = False
 
@@ -417,9 +439,20 @@ class Trainer:
     """
 
     # Those are used as methods of the Trainer in examples.
-    from .trainer_pt_utils import _get_learning_rate, log_metrics, metrics_format, save_metrics, save_state
+    from .trainer_pt_utils import (
+        _get_learning_rate,
+        log_metrics,
+        metrics_format,
+        save_metrics,
+        save_state,
+    )
 
-    @deprecate_kwarg("tokenizer", new_name="processing_class", version="5.0.0", raise_if_both_names=True)
+    @deprecate_kwarg(
+        "tokenizer",
+        new_name="processing_class",
+        version="5.0.0",
+        raise_if_both_names=True,
+    )
     def __init__(
         self,
         model: Union[PreTrainedModel, nn.Module, None] = None,
@@ -428,7 +461,12 @@ class Trainer:
         train_dataset: Optional[Union[Dataset, IterableDataset, "datasets.Dataset"]] = None,
         eval_dataset: Optional[Union[Dataset, dict[str, Dataset], "datasets.Dataset"]] = None,
         processing_class: Optional[
-            Union[PreTrainedTokenizerBase, BaseImageProcessor, FeatureExtractionMixin, ProcessorMixin]
+            Union[
+                PreTrainedTokenizerBase,
+                BaseImageProcessor,
+                FeatureExtractionMixin,
+                ProcessorMixin,
+            ]
         ] = None,
         model_init: Optional[Callable[[], PreTrainedModel]] = None,
         compute_loss_func: Optional[Callable] = None,
@@ -462,7 +500,7 @@ class Trainer:
         self.args = args
         self.compute_loss_func = compute_loss_func
         # Seed must be set before instantiating the model when using model
-        enable_full_determinism(self.args.seed) if self.args.full_determinism else set_seed(self.args.seed)
+        (enable_full_determinism(self.args.seed) if self.args.full_determinism else set_seed(self.args.seed))
 
         self.hp_name = None
         self.deepspeed = None
@@ -685,7 +723,11 @@ class Trainer:
         default_callbacks = DEFAULT_CALLBACKS + get_reporting_integration_callbacks(self.args.report_to)
         callbacks = default_callbacks if callbacks is None else default_callbacks + callbacks
         self.callback_handler = CallbackHandler(
-            callbacks, self.model, self.processing_class, self.optimizer, self.lr_scheduler
+            callbacks,
+            self.model,
+            self.processing_class,
+            self.optimizer,
+            self.lr_scheduler,
         )
         self.add_callback(PrinterCallback if self.args.disable_tqdm else DEFAULT_PROGRESS_CALLBACK)
 
@@ -812,7 +854,13 @@ class Trainer:
             # Prepare the SPMD mesh that is going to be used by the data loader and the FSDPv2 wrapper.
             # Tensor axis is just a placeholder where it will not be used in FSDPv2.
             num_devices = xr.global_runtime_device_count()
-            xs.set_global_mesh(xs.Mesh(np.array(range(num_devices)), (num_devices, 1), axis_names=("fsdp", "tensor")))
+            xs.set_global_mesh(
+                xs.Mesh(
+                    np.array(range(num_devices)),
+                    (num_devices, 1),
+                    axis_names=("fsdp", "tensor"),
+                )
+            )
         self.is_fsdp_xla_v1_enabled = self.is_fsdp_xla_enabled and not self.is_fsdp_xla_v2_enabled
 
     @property
@@ -948,7 +996,9 @@ class Trainer:
 
         if version.parse(datasets.__version__) < version.parse("1.4.0"):
             dataset.set_format(
-                type=dataset.format["type"], columns=columns, format_kwargs=dataset.format["format_kwargs"]
+                type=dataset.format["type"],
+                columns=columns,
+                format_kwargs=dataset.format["format_kwargs"],
             )
             return dataset
         else:
@@ -1033,7 +1083,9 @@ class Trainer:
             dataloader_params["prefetch_factor"] = self.args.dataloader_prefetch_factor
             if is_training:
                 dataloader_params["worker_init_fn"] = partial(
-                    seed_worker, num_workers=self.args.dataloader_num_workers, rank=self.args.process_index
+                    seed_worker,
+                    num_workers=self.args.dataloader_num_workers,
+                    rank=self.args.process_index,
                 )
 
         dataloader = DataLoader(dataset, **dataloader_params)
@@ -1419,7 +1471,10 @@ class Trainer:
         if args.optim == OptimizerNames.ADAFACTOR:
             optimizer_cls = Adafactor
             optimizer_kwargs.update({"scale_parameter": False, "relative_step": False})
-        elif args.optim in [OptimizerNames.ADAMW_TORCH, OptimizerNames.ADAMW_TORCH_FUSED]:
+        elif args.optim in [
+            OptimizerNames.ADAMW_TORCH,
+            OptimizerNames.ADAMW_TORCH_FUSED,
+        ]:
             from torch.optim import AdamW
 
             optimizer_cls = AdamW
@@ -1545,7 +1600,8 @@ class Trainer:
                         "momentum_dtype": getattr(torch, optim_args.get("momentum_dtype", "float32")),
                         "variance_dtype": getattr(torch, optim_args.get("variance_dtype", "float32")),
                         "compensation_buffer_dtype": getattr(
-                            torch, optim_args.get("compensation_buffer_dtype", "bfloat16")
+                            torch,
+                            optim_args.get("compensation_buffer_dtype", "bfloat16"),
                         ),
                     }
                 )
@@ -1766,7 +1822,11 @@ class Trainer:
             if isinstance(dataset, IterableDatasetShard):
                 return len(dataloader.dataset.dataset)
             return len(dataloader.dataset)
-        except (NameError, AttributeError, TypeError):  # no dataset or length, estimate by length of dataloader
+        except (
+            NameError,
+            AttributeError,
+            TypeError,
+        ):  # no dataset or length, estimate by length of dataloader
             return len(dataloader) * self.args.per_device_train_batch_size
 
     @staticmethod
@@ -1841,7 +1901,12 @@ class Trainer:
 
         self.create_accelerator_and_postprocess()
 
-    def _report_to_hp_search(self, trial: Union["optuna.Trial", dict[str, Any]], step: int, metrics: dict[str, float]):
+    def _report_to_hp_search(
+        self,
+        trial: Union["optuna.Trial", dict[str, Any]],
+        step: int,
+        metrics: dict[str, float],
+    ):
         if self.hp_search_backend is None or trial is None:
             return
         metrics = metrics.copy()
@@ -1937,7 +2002,13 @@ class Trainer:
             model.eval()
             dtype = torch.bfloat16 if not self.is_in_train and self.args.bf16_full_eval else dtype
             # conv_bn_folding is disabled as it fails in symbolic tracing, resulting in ipex warnings
-            model = ipex.optimize(model, dtype=dtype, level="O1", conv_bn_folding=False, inplace=not self.is_in_train)
+            model = ipex.optimize(
+                model,
+                dtype=dtype,
+                level="O1",
+                conv_bn_folding=False,
+                inplace=not self.is_in_train,
+            )
         else:
             if not model.training:
                 model.train()
@@ -2012,7 +2083,9 @@ class Trainer:
         # Distributed training using PyTorch FSDP
         if self.is_fsdp_xla_enabled:
             try:
-                from torch_xla.distributed.fsdp import XlaFullyShardedDataParallel as FSDP
+                from torch_xla.distributed.fsdp import (
+                    XlaFullyShardedDataParallel as FSDP,
+                )
                 from torch_xla.distributed.fsdp import checkpoint_module
                 from torch_xla.distributed.fsdp.wrap import (
                     size_based_auto_wrap_policy,
@@ -2034,7 +2107,8 @@ class Trainer:
 
             if self.args.fsdp_config["min_num_params"] > 0:
                 auto_wrap_policy = functools.partial(
-                    size_based_auto_wrap_policy, min_num_params=self.args.fsdp_config["min_num_params"]
+                    size_based_auto_wrap_policy,
+                    min_num_params=self.args.fsdp_config["min_num_params"],
                 )
             elif fsdp_transformer_layer_cls_to_wrap is not None:
                 transformer_cls_to_wrap = set()
@@ -2195,7 +2269,7 @@ class Trainer:
         model_reloaded = False
         if self.model_init is not None:
             # Seed must be set before instantiating the model when using model_init.
-            enable_full_determinism(self.args.seed) if self.args.full_determinism else set_seed(self.args.seed)
+            (enable_full_determinism(self.args.seed) if self.args.full_determinism else set_seed(self.args.seed))
             self.model = self.call_model_init(trial)
             model_reloaded = True
             # Reinitializes optimizer and scheduler
@@ -2245,7 +2319,12 @@ class Trainer:
             )
 
     def _inner_training_loop(
-        self, batch_size=None, args=None, resume_from_checkpoint=None, trial=None, ignore_keys_for_eval=None
+        self,
+        batch_size=None,
+        args=None,
+        resume_from_checkpoint=None,
+        trial=None,
+        ignore_keys_for_eval=None,
     ):
         self.accelerator.free_memory()
         self._train_batch_size = batch_size
@@ -2391,7 +2470,9 @@ class Trainer:
         if resume_from_checkpoint is not None:
             if self.is_deepspeed_enabled:
                 deepspeed_load_checkpoint(
-                    self.model_wrapped, resume_from_checkpoint, load_module_strict=not _is_peft_model(self.model)
+                    self.model_wrapped,
+                    resume_from_checkpoint,
+                    load_module_strict=not _is_peft_model(self.model),
                 )
             elif is_sagemaker_mp_enabled() or self.is_fsdp_enabled:
                 self._load_from_checkpoint(resume_from_checkpoint, self.model_wrapped)
@@ -2612,7 +2693,10 @@ class Trainer:
 
                         if not self.accelerator.optimizer_step_was_skipped:
                             # Delay optimizer scheduling until metrics are generated
-                            if not isinstance(self.lr_scheduler, torch.optim.lr_scheduler.ReduceLROnPlateau):
+                            if not isinstance(
+                                self.lr_scheduler,
+                                torch.optim.lr_scheduler.ReduceLROnPlateau,
+                            ):
                                 self.lr_scheduler.step()
 
                         model.zero_grad()
@@ -2654,7 +2738,14 @@ class Trainer:
 
             self.control = self.callback_handler.on_epoch_end(args, self.state, self.control)
             self._maybe_log_save_evaluate(
-                tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=learning_rate
+                tr_loss,
+                grad_norm,
+                model,
+                trial,
+                epoch,
+                ignore_keys_for_eval,
+                start_time,
+                learning_rate=learning_rate,
             )
 
             if DebugOption.TPU_METRICS_DEBUG in self.args.debug:
@@ -2778,7 +2869,13 @@ class Trainer:
                 if os.path.isdir(os.path.join(resume_from_checkpoint, folder_name))
                 and (
                     os.path.isfile(os.path.join(resume_from_checkpoint, folder_name, ADAPTER_WEIGHTS_NAME))
-                    or os.path.isfile(os.path.join(resume_from_checkpoint, folder_name, ADAPTER_SAFE_WEIGHTS_NAME))
+                    or os.path.isfile(
+                        os.path.join(
+                            resume_from_checkpoint,
+                            folder_name,
+                            ADAPTER_SAFE_WEIGHTS_NAME,
+                        )
+                    )
                 )
             ]
             if os.path.isdir(resume_from_checkpoint)
@@ -2824,7 +2921,10 @@ class Trainer:
                     # If the 'user_content.pt' file exists, load with the new smp api.
                     # Checkpoint must have been saved with the new smp api.
                     smp.resume_from_checkpoint(
-                        path=resume_from_checkpoint, tag=WEIGHTS_NAME, partial=False, load_optimizer=False
+                        path=resume_from_checkpoint,
+                        tag=WEIGHTS_NAME,
+                        partial=False,
+                        load_optimizer=False,
                     )
                 else:
                     # If the 'user_content.pt' file does NOT exist, load with the old smp api.
@@ -2883,7 +2983,11 @@ class Trainer:
                     if adapter_subdirs:
                         for subdir_name in adapter_subdirs:
                             peft_id = os.path.join(resume_from_checkpoint, subdir_name)
-                            model.load_adapter(peft_id, subdir_name, is_trainable=(subdir_name == active_adapter))
+                            model.load_adapter(
+                                peft_id,
+                                subdir_name,
+                                is_trainable=(subdir_name == active_adapter),
+                            )
                         model.set_adapter(active_adapter)
                     else:
                         model.load_adapter(resume_from_checkpoint, active_adapter, is_trainable=True)
@@ -2898,7 +3002,10 @@ class Trainer:
         else:
             # We load the sharded checkpoint
             load_result = load_sharded_checkpoint(
-                model, resume_from_checkpoint, strict=is_sagemaker_mp_enabled(), prefer_safe=self.args.save_safetensors
+                model,
+                resume_from_checkpoint,
+                strict=is_sagemaker_mp_enabled(),
+                prefer_safe=self.args.save_safetensors,
             )
             if not is_sagemaker_mp_enabled():
                 self._issue_warnings_after_load(load_result)
@@ -3017,7 +3124,9 @@ class Trainer:
             os.path.join(self.state.best_model_checkpoint, WEIGHTS_INDEX_NAME)
         ):
             load_result = load_sharded_checkpoint(
-                model, self.state.best_model_checkpoint, strict=is_sagemaker_mp_enabled()
+                model,
+                self.state.best_model_checkpoint,
+                strict=is_sagemaker_mp_enabled(),
             )
             if not is_sagemaker_mp_enabled():
                 self._issue_warnings_after_load(load_result)
@@ -3062,7 +3171,15 @@ class Trainer:
         return metrics
 
     def _maybe_log_save_evaluate(
-        self, tr_loss, grad_norm, model, trial, epoch, ignore_keys_for_eval, start_time, learning_rate=None
+        self,
+        tr_loss,
+        grad_norm,
+        model,
+        trial,
+        epoch,
+        ignore_keys_for_eval,
+        start_time,
+        learning_rate=None,
     ):
         if self.control.should_log and self.state.global_step > self._globalstep_last_logged:
             if is_torch_xla_available():
@@ -3076,7 +3193,10 @@ class Trainer:
             # reset tr_loss to zero
             tr_loss -= tr_loss
 
-            logs["loss"] = round(tr_loss_scalar / (self.state.global_step - self._globalstep_last_logged), 4)
+            logs["loss"] = round(
+                tr_loss_scalar / (self.state.global_step - self._globalstep_last_logged),
+                4,
+            )
             if grad_norm is not None:
                 logs["grad_norm"] = grad_norm.item() if isinstance(grad_norm, torch.Tensor) else grad_norm
             if learning_rate is not None:
@@ -3282,7 +3402,10 @@ class Trainer:
         if self.args.world_size <= 1:
             torch.save(rng_states, os.path.join(output_dir, "rng_state.pth"))
         else:
-            torch.save(rng_states, os.path.join(output_dir, f"rng_state_{self.args.process_index}.pth"))
+            torch.save(
+                rng_states,
+                os.path.join(output_dir, f"rng_state_{self.args.process_index}.pth"),
+            )
 
     def _save_optimizer_and_scheduler(self, output_dir):
         if is_torch_xla_available():
@@ -3295,14 +3418,21 @@ class Trainer:
                 xm.save(
                     optm,
                     os.path.join(
-                        output_dir, f"rank{self.args.process_index}-of-{self.args.world_size}-{OPTIMIZER_NAME}"
+                        output_dir,
+                        f"rank{self.args.process_index}-of-{self.args.world_size}-{OPTIMIZER_NAME}",
                     ),
                     master_only=False,
                 )
             else:
-                xm.save(self.optimizer.state_dict(), os.path.join(output_dir, OPTIMIZER_NAME))
+                xm.save(
+                    self.optimizer.state_dict(),
+                    os.path.join(output_dir, OPTIMIZER_NAME),
+                )
             with warnings.catch_warnings(record=True) as caught_warnings:
-                xm.save(self.lr_scheduler.state_dict(), os.path.join(output_dir, SCHEDULER_NAME))
+                xm.save(
+                    self.lr_scheduler.state_dict(),
+                    os.path.join(output_dir, SCHEDULER_NAME),
+                )
                 reissue_pt_warnings(caught_warnings)
         elif is_sagemaker_mp_enabled():
             opt_state_dict = self.optimizer.local_state_dict(gather_if_shard=False)
@@ -3327,10 +3457,18 @@ class Trainer:
         elif self.is_fsdp_enabled:
             # save fsdp specific ckpt for resuming from ckpt
             save_fsdp_model(
-                self.accelerator.state.fsdp_plugin, self.accelerator, self.model, output_dir, **_get_fsdp_ckpt_kwargs()
+                self.accelerator.state.fsdp_plugin,
+                self.accelerator,
+                self.model,
+                output_dir,
+                **_get_fsdp_ckpt_kwargs(),
             )
             save_fsdp_optimizer(
-                self.accelerator.state.fsdp_plugin, self.accelerator, self.optimizer, self.model, output_dir
+                self.accelerator.state.fsdp_plugin,
+                self.accelerator,
+                self.optimizer,
+                self.model,
+                output_dir,
             )
         elif self.args.should_save:
             # deepspeed.save_checkpoint above saves model/optim/sched
@@ -3346,7 +3484,10 @@ class Trainer:
             and not is_torch_xla_available()
         ):
             with warnings.catch_warnings(record=True) as caught_warnings:
-                torch.save(self.lr_scheduler.state_dict(), os.path.join(output_dir, SCHEDULER_NAME))
+                torch.save(
+                    self.lr_scheduler.state_dict(),
+                    os.path.join(output_dir, SCHEDULER_NAME),
+                )
             reissue_pt_warnings(caught_warnings)
 
     def _load_optimizer_and_scheduler(self, checkpoint):
@@ -3394,7 +3535,8 @@ class Trainer:
                     check_torch_load_is_safe()
                     optimizer_state = torch.load(
                         os.path.join(
-                            checkpoint, f"rank{self.args.process_index}-of-{self.args.world_size}-{OPTIMIZER_NAME}"
+                            checkpoint,
+                            f"rank{self.args.process_index}-of-{self.args.world_size}-{OPTIMIZER_NAME}",
                         ),
                         map_location="cpu",
                         weights_only=True,
@@ -3404,12 +3546,16 @@ class Trainer:
                 else:
                     check_torch_load_is_safe()
                     optimizer_state = torch.load(
-                        os.path.join(checkpoint, OPTIMIZER_NAME), map_location="cpu", weights_only=True
+                        os.path.join(checkpoint, OPTIMIZER_NAME),
+                        map_location="cpu",
+                        weights_only=True,
                     )
                 with warnings.catch_warnings(record=True) as caught_warnings:
                     check_torch_load_is_safe()
                     lr_scheduler_state = torch.load(
-                        os.path.join(checkpoint, SCHEDULER_NAME), map_location="cpu", weights_only=True
+                        os.path.join(checkpoint, SCHEDULER_NAME),
+                        map_location="cpu",
+                        weights_only=True,
                     )
                 reissue_pt_warnings(caught_warnings)
 
@@ -3423,17 +3569,31 @@ class Trainer:
                     if os.path.isfile(os.path.join(checkpoint, "user_content.pt")):
                         # Optimizer checkpoint was saved with smp >= 1.10
                         def opt_load_hook(mod, opt):
-                            opt.load_state_dict(smp.load(os.path.join(checkpoint, OPTIMIZER_NAME), partial=True))
+                            opt.load_state_dict(
+                                smp.load(
+                                    os.path.join(checkpoint, OPTIMIZER_NAME),
+                                    partial=True,
+                                )
+                            )
 
                     else:
                         # Optimizer checkpoint was saved with smp < 1.10
                         def opt_load_hook(mod, opt):
                             if IS_SAGEMAKER_MP_POST_1_10:
                                 opt.load_state_dict(
-                                    smp.load(os.path.join(checkpoint, OPTIMIZER_NAME), partial=True, back_compat=True)
+                                    smp.load(
+                                        os.path.join(checkpoint, OPTIMIZER_NAME),
+                                        partial=True,
+                                        back_compat=True,
+                                    )
                                 )
                             else:
-                                opt.load_state_dict(smp.load(os.path.join(checkpoint, OPTIMIZER_NAME), partial=True))
+                                opt.load_state_dict(
+                                    smp.load(
+                                        os.path.join(checkpoint, OPTIMIZER_NAME),
+                                        partial=True,
+                                    )
+                                )
 
                     self.model_wrapped.register_post_step_hook(opt_load_hook)
                 else:
@@ -3454,7 +3614,9 @@ class Trainer:
                         check_torch_load_is_safe()
                         self.optimizer.load_state_dict(
                             torch.load(
-                                os.path.join(checkpoint, OPTIMIZER_NAME), map_location=map_location, weights_only=True
+                                os.path.join(checkpoint, OPTIMIZER_NAME),
+                                map_location=map_location,
+                                weights_only=True,
                             )
                         )
                 with warnings.catch_warnings(record=True) as caught_warnings:
@@ -3475,13 +3637,19 @@ class Trainer:
         if is_torch_xla_available():
             xm.rendezvous("saving_scaler_state")
             with warnings.catch_warnings(record=True) as caught_warnings:
-                xm.save(self.accelerator.scaler.state_dict(), os.path.join(output_dir, SCALER_NAME))
+                xm.save(
+                    self.accelerator.scaler.state_dict(),
+                    os.path.join(output_dir, SCALER_NAME),
+                )
                 reissue_pt_warnings(caught_warnings)
 
         # Save SCALER
         if self.args.should_save and not is_torch_xla_available():
             with warnings.catch_warnings(record=True) as caught_warnings:
-                torch.save(self.accelerator.scaler.state_dict(), os.path.join(output_dir, SCALER_NAME))
+                torch.save(
+                    self.accelerator.scaler.state_dict(),
+                    os.path.join(output_dir, SCALER_NAME),
+                )
             reissue_pt_warnings(caught_warnings)
 
     def _load_scaler(self, checkpoint):
@@ -3498,7 +3666,9 @@ class Trainer:
                 with warnings.catch_warnings(record=True) as caught_warnings:
                     check_torch_load_is_safe()
                     scaler_state = torch.load(
-                        os.path.join(checkpoint, SCALER_NAME), map_location="cpu", weights_only=True
+                        os.path.join(checkpoint, SCALER_NAME),
+                        map_location="cpu",
+                        weights_only=True,
                     )
                 reissue_pt_warnings(caught_warnings)
                 xm.send_cpu_data_to_device(scaler_state, self.args.device)
@@ -3713,7 +3883,10 @@ class Trainer:
         return ctx_manager
 
     def training_step(
-        self, model: nn.Module, inputs: dict[str, Union[torch.Tensor, Any]], num_items_in_batch=None
+        self,
+        model: nn.Module,
+        inputs: dict[str, Union[torch.Tensor, Any]],
+        num_items_in_batch=None,
     ) -> torch.Tensor:
         """
         Perform a training step on a batch of inputs.
@@ -3935,7 +4108,8 @@ class Trainer:
                 "shard_metadata": model.get_shard_metadata(),
             }
             ckpt_path = os.path.join(
-                output_dir, f"rank{self.args.process_index}-of-{self.args.world_size}-{WEIGHTS_NAME}"
+                output_dir,
+                f"rank{self.args.process_index}-of-{self.args.world_size}-{WEIGHTS_NAME}",
             )
             # All ranks save sharded checkpoint
             xm.save(ckpt, ckpt_path, master_only=False)
@@ -3943,7 +4117,9 @@ class Trainer:
             xm.rendezvous("save_full_checkpoints")
             # Master save full checkpoint
             if self.args.should_save:
-                from torch_xla.distributed.fsdp import consolidate_sharded_model_checkpoints
+                from torch_xla.distributed.fsdp import (
+                    consolidate_sharded_model_checkpoints,
+                )
 
                 full_state_dict, _ = consolidate_sharded_model_checkpoints(
                     ckpt_prefix=os.path.join(output_dir, ""),
@@ -3999,21 +4175,30 @@ class Trainer:
             if state_dict is None:
                 state_dict = self.model.state_dict()
 
-            if isinstance(self.accelerator.unwrap_model(self.model, keep_torch_compile=False), supported_classes):
+            if isinstance(
+                self.accelerator.unwrap_model(self.model, keep_torch_compile=False),
+                supported_classes,
+            ):
                 self.accelerator.unwrap_model(self.model, keep_torch_compile=False).save_pretrained(
-                    output_dir, state_dict=state_dict, safe_serialization=self.args.save_safetensors
+                    output_dir,
+                    state_dict=state_dict,
+                    safe_serialization=self.args.save_safetensors,
                 )
             else:
                 logger.info("Trainer.model is not a `PreTrainedModel`, only saving its state dict.")
                 if self.args.save_safetensors:
                     safetensors.torch.save_file(
-                        state_dict, os.path.join(output_dir, SAFE_WEIGHTS_NAME), metadata={"format": "pt"}
+                        state_dict,
+                        os.path.join(output_dir, SAFE_WEIGHTS_NAME),
+                        metadata={"format": "pt"},
                     )
                 else:
                     torch.save(state_dict, os.path.join(output_dir, WEIGHTS_NAME))
         else:
             self.model.save_pretrained(
-                output_dir, state_dict=state_dict, safe_serialization=self.args.save_safetensors
+                output_dir,
+                state_dict=state_dict,
+                safe_serialization=self.args.save_safetensors,
             )
 
         if self.processing_class is not None:
@@ -4063,7 +4248,9 @@ class Trainer:
             if mtime_diff < 1.0:  # less than 1 second, which is almost impossible when mtime works fine
                 warnings.warn("mtime may not be reliable on this filesystem, falling back to numerical ordering")
                 return self._sorted_checkpoints(
-                    use_mtime=False, output_dir=output_dir, checkpoint_prefix=checkpoint_prefix
+                    use_mtime=False,
+                    output_dir=output_dir,
+                    checkpoint_prefix=checkpoint_prefix,
                 )
         checkpoints_sorted = [checkpoint[1] for checkpoint in checkpoints_sorted]
 
@@ -4074,7 +4261,10 @@ class Trainer:
         ):
             best_model_index = checkpoints_sorted.index(str(Path(self.state.best_model_checkpoint)))
             for i in range(best_model_index, len(checkpoints_sorted) - 2):
-                checkpoints_sorted[i], checkpoints_sorted[i + 1] = checkpoints_sorted[i + 1], checkpoints_sorted[i]
+                checkpoints_sorted[i], checkpoints_sorted[i + 1] = (
+                    checkpoints_sorted[i + 1],
+                    checkpoints_sorted[i],
+                )
         return checkpoints_sorted
 
     def _rotate_checkpoints(self, use_mtime=False, output_dir=None) -> None:
@@ -4207,7 +4397,10 @@ class Trainer:
         return output.metrics
 
     def predict(
-        self, test_dataset: Dataset, ignore_keys: Optional[list[str]] = None, metric_key_prefix: str = "test"
+        self,
+        test_dataset: Dataset,
+        ignore_keys: Optional[list[str]] = None,
+        metric_key_prefix: str = "test",
     ) -> PredictionOutput:
         """
         Run prediction and returns predictions and potential metrics.
@@ -4249,7 +4442,10 @@ class Trainer:
 
         eval_loop = self.prediction_loop if self.args.use_legacy_prediction_loop else self.evaluation_loop
         output = eval_loop(
-            test_dataloader, description="Prediction", ignore_keys=ignore_keys, metric_key_prefix=metric_key_prefix
+            test_dataloader,
+            description="Prediction",
+            ignore_keys=ignore_keys,
+            metric_key_prefix=metric_key_prefix,
         )
         total_batch_size = self.args.eval_batch_size * self.args.world_size
         if f"{metric_key_prefix}_jit_compilation_time" in output.metrics:
@@ -4268,7 +4464,11 @@ class Trainer:
         self.control = self.callback_handler.on_predict(self.args, self.state, self.control, output.metrics)
         self._memory_tracker.stop_and_update_metrics(output.metrics)
 
-        return PredictionOutput(predictions=output.predictions, label_ids=output.label_ids, metrics=output.metrics)
+        return PredictionOutput(
+            predictions=output.predictions,
+            label_ids=output.label_ids,
+            metrics=output.metrics,
+        )
 
     def evaluation_loop(
         self,
@@ -4483,7 +4683,12 @@ class Trainer:
             if not key.startswith(f"{metric_key_prefix}_"):
                 metrics[f"{metric_key_prefix}_{key}"] = metrics.pop(key)
 
-        return EvalLoopOutput(predictions=all_preds, label_ids=all_labels, metrics=metrics, num_samples=num_samples)
+        return EvalLoopOutput(
+            predictions=all_preds,
+            label_ids=all_labels,
+            metrics=metrics,
+            num_samples=num_samples,
+        )
 
     def _nested_gather(self, tensors, name=None):
         """
@@ -4546,7 +4751,11 @@ class Trainer:
         inputs = self._prepare_inputs(inputs)
         if ignore_keys is None:
             if hasattr(self.model, "config"):
-                ignore_keys = getattr(self.model.config, "keys_to_ignore_at_inference", ["past_key_values"])
+                ignore_keys = getattr(
+                    self.model.config,
+                    "keys_to_ignore_at_inference",
+                    ["past_key_values"],
+                )
             else:
                 ignore_keys = []
 
@@ -4743,7 +4952,10 @@ class Trainer:
             modeling_files.extend([ADAPTER_CONFIG_NAME, ADAPTER_WEIGHTS_NAME, ADAPTER_SAFE_WEIGHTS_NAME])
         for modeling_file in modeling_files:
             if os.path.isfile(os.path.join(checkpoint_folder, modeling_file)):
-                shutil.copy(os.path.join(checkpoint_folder, modeling_file), os.path.join(output_dir, modeling_file))
+                shutil.copy(
+                    os.path.join(checkpoint_folder, modeling_file),
+                    os.path.join(output_dir, modeling_file),
+                )
         # Saving the processing class is fast and we don't know how many files it may have spawned, so we resave it to be sure.
         if self.processing_class is not None:
             self.processing_class.save_pretrained(output_dir)
@@ -4766,7 +4978,10 @@ class Trainer:
 
         push_jobs = [model_push_job]
 
-        if self.args.hub_strategy in [HubStrategy.CHECKPOINT, HubStrategy.ALL_CHECKPOINTS]:
+        if self.args.hub_strategy in [
+            HubStrategy.CHECKPOINT,
+            HubStrategy.ALL_CHECKPOINTS,
+        ]:
             path_in_repo = (
                 "last-checkpoint" if self.args.hub_strategy == HubStrategy.CHECKPOINT else Path(checkpoint_folder).name
             )
@@ -4998,7 +5213,11 @@ class Trainer:
                     batch_kwargs["losses"] = losses_host if "loss" in args.include_for_metrics else None
                     batch_kwargs["inputs"] = inputs_host if "inputs" in args.include_for_metrics else None
                     metrics = self.compute_metrics(
-                        EvalPrediction(predictions=preds_host, label_ids=labels_host, **batch_kwargs),
+                        EvalPrediction(
+                            predictions=preds_host,
+                            label_ids=labels_host,
+                            **batch_kwargs,
+                        ),
                         compute_result=is_last_step,
                     )
 
@@ -5015,7 +5234,12 @@ class Trainer:
                 # Set back to None to begin a new accumulation
                 del losses_host, preds_host, labels_host, inputs_host
                 torch.cuda.empty_cache()
-                losses_host, preds_host, labels_host, inputs_host = None, None, None, None
+                losses_host, preds_host, labels_host, inputs_host = (
+                    None,
+                    None,
+                    None,
+                    None,
+                )
 
         if args.past_index and hasattr(self, "_past"):
             # Clean the state at the end of the evaluation loop
@@ -5056,7 +5280,12 @@ class Trainer:
             if not key.startswith(f"{metric_key_prefix}_"):
                 metrics[f"{metric_key_prefix}_{key}"] = metrics.pop(key)
 
-        return EvalLoopOutput(predictions=preds, label_ids=label_ids, metrics=metrics, num_samples=num_examples)
+        return EvalLoopOutput(
+            predictions=preds,
+            label_ids=label_ids,
+            metrics=metrics,
+            num_samples=num_examples,
+        )
 
     def _gather_and_numpify(self, tensors, name):
         """
@@ -5134,7 +5363,12 @@ class Trainer:
 
         if is_accelerate_available("0.28.0"):
             # Extract dataloader config params from accelerator config
-            dataloader_params = ["split_batches", "dispatch_batches", "even_batches", "use_seedable_sampler"]
+            dataloader_params = [
+                "split_batches",
+                "dispatch_batches",
+                "even_batches",
+                "use_seedable_sampler",
+            ]
             dataloader_config = DataLoaderConfiguration(
                 **{param: accelerator_config.pop(param) for param in dataloader_params}
             )
@@ -5190,7 +5424,11 @@ class Trainer:
         if self.is_fsdp_enabled:
             fsdp_plugin = self.accelerator.state.fsdp_plugin
             for param in ["limit_all_gathers", "activation_checkpointing"]:
-                setattr(fsdp_plugin, param, self.args.fsdp_config.get(param, getattr(fsdp_plugin, param)))
+                setattr(
+                    fsdp_plugin,
+                    param,
+                    self.args.fsdp_config.get(param, getattr(fsdp_plugin, param)),
+                )
             if fsdp_plugin.activation_checkpointing and self.args.gradient_checkpointing:
                 raise ValueError(
                     "The activation_checkpointing in FSDP config and the gradient_checkpointing in training arg "
@@ -5251,7 +5489,8 @@ class Trainer:
                 and version.parse(accelerate_version) > version.parse("0.27.0")
             ):
                 self.accelerator.state.fsdp_plugin.set_mixed_precision(
-                    self.model.hf_quantizer.quantization_config.bnb_4bit_quant_storage, override=True
+                    self.model.hf_quantizer.quantization_config.bnb_4bit_quant_storage,
+                    override=True,
                 )
 
     def get_batch_samples(self, epoch_iterator, num_batches, device):
@@ -5300,7 +5539,10 @@ class Trainer:
         return batch_samples, num_items_in_batch
 
     def set_initial_training_values(
-        self, args: TrainingArguments, dataloader: DataLoader, total_train_batch_size: int
+        self,
+        args: TrainingArguments,
+        dataloader: DataLoader,
+        total_train_batch_size: int,
     ):
         """
         Calculates and returns the following values:
