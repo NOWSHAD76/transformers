@@ -4248,20 +4248,20 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             del self.token2wav
         self.has_talker = False
 
-    def discriminator_loss(
-        self, disc_real_outputs: List[torch.Tensor], disc_generated_outputs: List[torch.Tensor]
-    ) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
-        loss = 0
-        r_losses = []
-        g_losses = []
-        for dr, dg in zip(disc_real_outputs, disc_generated_outputs):
-            r_loss = torch.mean((1 - dr) ** 2)
-            g_loss = torch.mean(dg**2)
-            loss += r_loss + g_loss
-            r_losses.append(r_loss.item())
-            g_losses.append(g_loss.item())
+    # def discriminator_loss(
+    #     self, disc_real_outputs: List[torch.Tensor], disc_generated_outputs: List[torch.Tensor]
+    # ) -> Tuple[torch.Tensor, List[torch.Tensor], List[torch.Tensor]]:
+    #     loss = 0
+    #     r_losses = []
+    #     g_losses = []
+    #     for dr, dg in zip(disc_real_outputs, disc_generated_outputs):
+    #         r_loss = torch.mean((1 - dr) ** 2)
+    #         g_loss = torch.mean(dg**2)
+    #         loss += r_loss + g_loss
+    #         r_losses.append(r_loss.item())
+    #         g_losses.append(g_loss.item())
 
-        return loss, r_losses, g_losses
+    #     return loss, r_losses, g_losses
 
     @classmethod
     def from_pretrained(
@@ -4597,12 +4597,13 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         return_dict: Optional[bool] = None,
         logits_to_keep: Union[int, torch.Tensor] = 0,
         # Talker args
-        talker_input_ids=None,
+        # talker_input_ids=None,
         talker_attention_mask=None,
         talker_position_ids=None,
         talker_past_key_values=None,
-        thinker_reply_part: Optional[torch.FloatTensor] = None,
-        talker_inputs_embeds: Optional[torch.FloatTensor] = None,
+        talker_label=None,
+        # thinker_reply_part: Optional[torch.FloatTensor] = None,
+        # talker_inputs_embeds: Optional[torch.FloatTensor] = None,
         rope_deltas: Optional[torch.LongTensor] = None,
         talker_cache_position: Optional[torch.LongTensor] = None,
         input_text_ids: Optional[torch.LongTensor] = None,
@@ -4623,6 +4624,9 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         Returns:
             A tuple or dictionary containing the loss and other outputs
         """
+        # print("Inside forward")
+        if hasattr(self, "token2wav"):
+            del self.token2wav
         # Process thinker inputs
         thinker_outputs = self.thinker(
             input_ids=input_ids,
@@ -4650,7 +4654,7 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             thinker_hidden_states = thinker_outputs.hidden_states
 
             # Project hidden states using projection layers
-            embeds_to_talker = thinker_hidden_states[0][0].clone()
+            embeds_to_talker = thinker_outputs.hidden_states[0].clone()
 
             # Handle special tokens (similar to generate method)
             if pixel_values is not None:
@@ -4663,117 +4667,123 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
                 )
                 embeds_to_talker.masked_scatter_(image_mask, image_mask_tensor)
 
+            # print(f"Type of embeds_talker {embeds_to_talker.shape}")
+            # print(f"Type of hidden states one level {thinker_hidden_states[0][1:].shape}")
+            # processed_thinker_hidden = embeds_to_talker + thinker_hidden_states[0][1:] + thinker_hidden_states[1:]
             # Process hidden states
-            processed_thinker_hidden = ((embeds_to_talker,) + thinker_hidden_states[0][1:],) + thinker_hidden_states[
-                1:
-            ]
+            # processed_thinker_hidden = (embeds_to_talker + thinker_hidden_states[0][1:],) + thinker_hidden_states[1:]
+            processed_thinker_hidden = (embeds_to_talker,) + thinker_hidden_states[1:]
 
             # Apply projections
-            thinker_token_embeds = [
-                self.projection_thinker_L0(token_hidden_states[0]) for token_hidden_states in processed_thinker_hidden
-            ]
-            thinker_hidden_states = [
-                self.projection_thinker_LN(token_hidden_states[-1]) for token_hidden_states in processed_thinker_hidden
-            ]
+            thinker_token_embeds = self.projection_thinker_L0(processed_thinker_hidden[0])
+            thinker_hidden_states = self.projection_thinker_LN(processed_thinker_hidden[-1])
 
             talker_text_bos_token = speaker_parm_bos
-            talker_input_ids = torch.cat(
-                [
-                    torch.full_like(
-                        input_ids,
-                        fill_value=self.talker.codec_mask_token,
-                    ),
-                    torch.tensor(
-                        [[self.talker.codec_pad_token]],
-                        dtype=torch.long,
-                    ),
-                    torch.tensor(
-                        [[self.talker.codec_bos_token]],
-                        dtype=torch.long,
-                    ),
-                ],
-                dim=1,
-            )
+            # talker_input_ids = torch.cat(
+            #     [
+            #         torch.full_like(
+            #             input_ids,
+            #             fill_value=self.talker.codec_mask_token,
+            #             device=self.talker.device,
+            #         ),
+            #         torch.tensor(
+            #             [[self.talker.codec_pad_token]],
+            #             dtype=torch.long,
+            #             device=self.talker.device,
+            #         ),
+            #         torch.tensor(
+            #             [[self.talker.codec_bos_token]],
+            #             dtype=torch.long,
+            #             device=self.talker.device,
+            #         ),
+            #     ],
+            #     dim=1,
+            # )
             thinker_embed_tokens = self.thinker.get_input_embeddings()
-            talker_text_bos_token = torch.tensor([[talker_text_bos_token]], dtype=torch.long)
-            talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token)
-            talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed)
+            talker_text_bos_token = torch.tensor(
+                [[talker_text_bos_token]], dtype=torch.long, device=self.talker.device
+            )
+            talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token).to(self.talker.device)
+            talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed).to(self.talker.device)
 
             # Prepare talker inputs
-            talker_inputs_embeds = thinker_hidden_states[0] + thinker_token_embeds[0]
-            thinker_reply_part = torch.cat(thinker_hidden_states[1:], dim=1) + torch.cat(
-                thinker_token_embeds[1:], dim=1
-            )
-            talker_inputs_embeds = torch.cat(
-                [
-                    talker_inputs_embeds,
-                    talker_text_bos_embed,
-                    thinker_reply_part[:, :1, :],
-                ],
-                dim=1,
-            )
-            eos_embedding = thinker_embed_tokens(
-                torch.tensor(
-                    [[self.talker.text_eos_token]],
-                    dtype=torch.long,
-                )
-            )
-            eos_embedding = self.projection_thinker_vocab(eos_embedding)
+            talker_inputs_embeds = thinker_hidden_states + thinker_token_embeds
 
-            pad_embedding = thinker_embed_tokens(
-                torch.tensor(
-                    [[self.talker.text_pad_token]],
-                    dtype=torch.long,
+            if talker_label is not None:
+                talker_embd = self.talker.get_input_embeddings()
+                talker_label = talker_label.to(self.talker.device)
+                label_embd = talker_embd(talker_label)
+                talker_inputs_embeds = torch.cat(
+                    [talker_inputs_embeds, talker_text_bos_embed],
+                    dim=1,
                 )
-            )
-            pad_embedding = self.projection_thinker_vocab(pad_embedding)
+                talker_inputs_embeds = torch.cat(
+                    [talker_inputs_embeds, label_embd],
+                    dim=1,
+                )
+            else:
+                talker_inputs_embeds = torch.cat(
+                    [
+                        talker_inputs_embeds,
+                        talker_text_bos_embed,
+                    ],
+                    dim=1,
+                )
+            # eos_embedding = thinker_embed_tokens(
+            #     torch.tensor([[self.talker.text_eos_token]], dtype=torch.long, device=self.talker.device)
+            # )
+            # eos_embedding = self.projection_thinker_vocab(eos_embedding).to(self.talker.device)
 
-            thinker_reply_part = torch.cat(
-                [
-                    thinker_reply_part[:, 1:, :],
-                    eos_embedding,
-                    pad_embedding,
-                ],
-                dim=1,
-            )
+            # pad_embedding = thinker_embed_tokens(
+            #     torch.tensor([[self.talker.text_pad_token]], dtype=torch.long, device=self.talker.device)
+            # )
+            # pad_embedding = self.projection_thinker_vocab(pad_embedding).to(self.talker.device)
+
+            # thinker_reply_part = torch.cat(
+            #     [
+            #         thinker_reply_part[:, 1:, :],
+            #         eos_embedding,
+            #         pad_embedding,
+            #     ],
+            #     dim=1,
+            # )
             # talker_attention_mask = None
             # if "attention_mask" in kwargs:
             #     talker_attention_mask = torch.cat(
             #         [kwargs["attention_mask"], kwargs["attention_mask"].new_ones((1, 2))],
             #         dim=1,
             #     )
-
+            talker_attention_mask = torch.ones(talker_inputs_embeds.shape[0], talker_inputs_embeds.shape[1])
+            talker_attention_mask = talker_attention_mask.to(device=self.talker.device)
             # Forward pass through talker
             talker_outputs = self.talker(
-                input_ids=talker_input_ids,
+                # input_ids=talker_input_ids,
                 attention_mask=talker_attention_mask,
                 position_ids=None,
                 past_key_values=talker_past_key_values,
-                thinker_reply_part=thinker_reply_part,
+                # thinker_reply_part=thinker_reply_part,
                 inputs_embeds=talker_inputs_embeds,
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
             )
 
-            talker_loss = talker_outputs.loss
-            talker_result = talker_outputs.logits
-            talker_generate_codes = talker_result[:, talker_input_ids.shape[1] : -1]
-            wav = self.token2wav(
-                talker_generate_codes,
-                conditioning=speaker_parm_cond,
-                reference_mel=speaker_parm_ref,
-            )
-            wave_loss, r_loss, g_loss = self.discriminator_loss(wave_label, wav)
+            # talker_loss = talker_outputs.loss
+            logits = talker_outputs.logits[:, -talker_label.shape[1] :, :]
+            shift_logits = logits[..., :, :].contiguous()
+            shift_logits = shift_logits.view(-1, 8448)
+            shift_labels = talker_label[..., :].contiguous()
+            shift_labels = shift_labels.view(-1)
+            talker_loss = nn.CrossEntropyLoss()(shift_logits, shift_labels)
 
             # Combine losses
-            total_loss = thinker_loss + talker_loss + wave_loss
+            # total_loss = thinker_loss + talker_loss + wave_loss
 
             if return_dict:
                 return {
-                    "loss": total_loss,
+                    # "loss": total_loss,
                     "thinker_loss": thinker_loss,
                     "talker_loss": talker_loss,
-                    "wave_loss": wave_loss,
+                    # "wave_loss": wave_loss,
                     "thinker_logits": thinker_outputs.logits,
                     "talker_logits": talker_outputs.logits,
                     "thinker_hidden_states": thinker_outputs.hidden_states,
@@ -4781,10 +4791,10 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
                 }
             else:
                 return (
-                    total_loss,
+                    # total_loss,
                     thinker_loss,
                     talker_loss,
-                    wave_loss,
+                    # wave_loss,
                     thinker_outputs.logits,
                     talker_outputs.logits,
                 )

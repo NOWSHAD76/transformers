@@ -2714,7 +2714,6 @@ class Qwen2_5OmniTalkerForConditionalGeneration(Qwen2_5OmniPreTrainedModelForCon
         >>> processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Generate the caption in English: Glass is breaking."
         ```"""
-
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -2764,7 +2763,6 @@ class Qwen2_5OmniTalkerForConditionalGeneration(Qwen2_5OmniPreTrainedModelForCon
 
         if attention_mask is not None:
             attention_mask = attention_mask.to(inputs_embeds.device)
-
         outputs = self.model(
             attention_mask=attention_mask,
             position_ids=position_ids,

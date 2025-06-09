@@ -2954,7 +2954,7 @@ class Qwen2_5OmniTalkerForConditionalGeneration(Qwen2_5OmniPreTrainedModelForCon
         >>> processor.batch_decode(generate_ids, skip_special_tokens=True, clean_up_tokenization_spaces=False)[0]
         "Generate the caption in English: Glass is breaking."
         ```"""
-
+        print("Inside conditional forward")
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -3004,6 +3004,9 @@ class Qwen2_5OmniTalkerForConditionalGeneration(Qwen2_5OmniPreTrainedModelForCon
 
         if attention_mask is not None:
             attention_mask = attention_mask.to(inputs_embeds.device)
+
+        print(f"Input embeds shape is {inputs_embeds.shape}")
+        print(f"Input embeds thinker to talker proj shape is {talker_lm_input.shape}")
 
         outputs = self.model(
             attention_mask=attention_mask,
@@ -4458,6 +4461,8 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
         if input_ids.shape[0] != 1 and return_audio:
             raise NotImplementedError("Qwen2.5-Omni currently does not support batched inference with audio output")
 
+        print(f"Input IDS shape is {input_ids.shape}")
+
         shared_kwargs = {"use_audio_in_video": use_audio_in_video}
         thinker_kwargs = {
             "max_new_tokens": thinker_max_new_tokens,
@@ -4505,6 +4510,9 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
         if generate_audio:
             thinker_kwargs["output_hidden_states"] = True
             thinker_kwargs["return_dict_in_generate"] = True
+
+        print("Thinker kwargs")
+        print(thinker_kwargs)
 
         thinker_result = self.thinker.generate(input_ids=input_ids, **thinker_kwargs)
 
@@ -4608,6 +4616,9 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
                 [kwargs["attention_mask"], kwargs["attention_mask"].new_ones((1, 2))], dim=1
             ).to(self.talker.device)
 
+        print("Talker kwargs")
+        print(talker_kwargs)
+
         talker_result = self.talker.generate(
             input_ids=talker_input_ids,
             input_text_ids=talker_input_text_ids,
@@ -4618,6 +4629,13 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
             **{k: (v.to(self.talker.device) if torch.is_tensor(v) else v) for k, v in talker_kwargs.items()},
         )
         talker_generate_codes = talker_result[:, talker_input_ids.shape[1] : -1]
+
+        print("talker_generate_codes shape is ")
+        # print(f"talker_result type {type(talker_result)}")
+        # print("Taker result is")
+        # print(talker_result)
+        # print("Input to token2wav")
+        print(talker_generate_codes.shape)
 
         # 3. Generate wavs from code
         if self.token2wav.dtype != torch.float:
@@ -4630,7 +4648,7 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
             **token2wav_kwargs,
         )
 
-        return thinker_result.sequences, wav.float()
+        return thinker_result.sequences, wav.float(), talker_generate_codes
 
 
 __all__ = [
