@@ -4653,6 +4653,9 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         talker_past_key_values=None,
         talker_label=None,
         thinker_hidden_states_label=None,
+        talker_text_bos_embed=None,
+        # eos_embedding=None,
+        # pad_embedding=None,
         # thinker_reply_part: Optional[torch.FloatTensor] = None,
         # talker_inputs_embeds: Optional[torch.FloatTensor] = None,
         rope_deltas: Optional[torch.LongTensor] = None,
@@ -4765,17 +4768,50 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             # talker_inputs_embeds = thinker_hidden_states + thinker_token_embeds
 
             if talker_label is not None and thinker_hidden_states_label is not None:
-                talker_embd = self.talker.get_input_embeddings()
-                talker_label = talker_label.to(self.talker.device)
-                label_embd = talker_embd(talker_label)
-                # talker_inputs_embeds = torch.cat(
-                #     [talker_inputs_embeds, talker_text_bos_embed],
-                #     dim=1,
-                # )
-                talker_inputs_embeds = torch.cat(
-                    [talker_inputs_embeds, label_embd],
-                    dim=1,
-                )
+                with torch.no_grad():
+                    # talker_label = talker_label[speaker]
+                    m = talker_label.size(1)
+                    n = 0
+                    while (
+                        f"embeds_{n}" in thinker_hidden_states_label
+                        and f"last_hd_layer_{n}" in thinker_hidden_states_label
+                    ):
+                        n += 1
+                    tokens = []
+                    for i in range(m):
+                        # print(f"Working on {i}")
+                        if i == 0:
+                            emb = thinker_hidden_states_label[f"embeds_{i}"]
+                            hd = thinker_hidden_states_label[f"last_hd_layer_{i}"]
+                            hidden_sum = emb + hd
+                            hidden_sum = hidden_sum.to(device=self.talker.device, dtype=self.talker.dtype)
+                            hidden_sum = self.projection_thinker_L0(hidden_sum)
+                            tokens.append(hidden_sum)
+                            tokens.append(talker_text_bos_embed)
+                        if i < n:
+                            emb = thinker_hidden_states_label[f"embeds_{i}"]
+                            hd = thinker_hidden_states_label[f"last_hd_layer_{i}"]
+                            hidden_sum = emb + hd
+                            hidden_sum = hidden_sum.to(device=self.talker.device, dtype=self.talker.dtype)
+                            hidden_sum = self.projection_thinker_L0(hidden_sum)
+                        elif i == n:
+                            hidden_sum = talker_inputs_embeds
+                        elif i == n + 1:
+                            hidden_sum = self.static_tokens_embed["eos_embedding"]
+                        else:
+                            hidden_sum = self.static_tokens_embed["pad_embedding"]
+
+                        # tokens.append(hidden_sum)
+                        talker_id = talker_label[0, i].item()  # .to(device=model.talker.device,dtype=model.dtype)
+                        talker_embd = self.talker.get_input_embeddings()(
+                            torch.tensor([talker_id], dtype=torch.long, device=self.talker.device)
+                        )
+                        if i == 0:
+                            tokens.append(talker_embd.unsqueeze(0))
+                        else:
+                            input_embd = hidden_sum + talker_embd.unsqueeze(0)
+                            tokens.append(input_embd)
+                inputs_embeds = torch.cat(tokens, dim=1)
             else:
                 # talker_inputs_embeds = torch.cat(
                 #     [
@@ -4809,7 +4845,7 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             #         [kwargs["attention_mask"], kwargs["attention_mask"].new_ones((1, 2))],
             #         dim=1,
             #     )
-            talker_attention_mask = torch.ones(talker_inputs_embeds.shape[0], talker_inputs_embeds.shape[1])
+            talker_attention_mask = torch.ones(inputs_embeds.shape[0], inputs_embeds.shape[1])
             talker_attention_mask = talker_attention_mask.to(device=self.talker.device)
             # Forward pass through talker
             talker_outputs = self.talker(
@@ -4818,14 +4854,15 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
                 position_ids=None,
                 past_key_values=talker_past_key_values,
                 # thinker_reply_part=thinker_reply_part,
-                inputs_embeds=talker_inputs_embeds,
+                inputs_embeds=inputs_embeds,
                 output_hidden_states=output_hidden_states,
                 return_dict=return_dict,
             )
 
             # talker_loss = talker_outputs.loss
-            logits = talker_outputs.logits[:, -talker_label.shape[1] :, :]
-            shift_logits = logits[..., :, :].contiguous()
+            logits = talker_outputs.logits[:, :-1]
+            target_logits = logits[:, -talker_label.shape[1] :, :]
+            shift_logits = target_logits[..., :, :].contiguous()
             shift_logits = shift_logits.view(-1, 8448)
             shift_labels = talker_label[..., :].contiguous()
             shift_labels = shift_labels.view(-1)

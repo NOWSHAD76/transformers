@@ -2998,6 +2998,7 @@ class Qwen2_5OmniTalkerForConditionalGeneration(Qwen2_5OmniPreTrainedModelForCon
             # print(f"Thinker reply part shape is {thinker_reply_part.shape}")
             # 1. Inference tokens after second token
             codec_embeds = self.get_input_embeddings()(input_ids)
+            print(f"Shape of thinker reply getting added is {thinker_reply_part[:, :1, :].shape}")
             inputs_embeds = codec_embeds + thinker_reply_part[:, :1, :]
             if thinker_reply_part.shape[1] > 1:
                 thinker_reply_part = thinker_reply_part[:, 1:, :]
