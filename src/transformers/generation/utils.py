@@ -3547,7 +3547,7 @@ class GenerationMixin(ContinuousMixin):
         this_peer_finished = False
         unfinished_sequences = torch.ones(batch_size, dtype=torch.long, device=input_ids.device)
         model_kwargs = self._get_initial_cache_position(cur_len, input_ids.device, model_kwargs)
-
+        # print("In generation model_forward")
         model_forward = self.__call__
         compile_forward = self._valid_auto_compile_criteria(model_kwargs, generation_config)
         if compile_forward:
@@ -3574,6 +3574,7 @@ class GenerationMixin(ContinuousMixin):
             is_prefill = True
 
         while self._has_unfinished_sequences(this_peer_finished, synced_gpus, device=input_ids.device):
+            # print("Inside unfinished sequences")
             # prepare model inputs
             model_inputs = self.prepare_inputs_for_generation(input_ids, **model_kwargs)
 
@@ -3600,6 +3601,9 @@ class GenerationMixin(ContinuousMixin):
             # (the clone itself is always small)
             next_token_logits = outputs.logits[:, -1, :].to(copy=True, dtype=torch.float32, device=input_ids.device)
 
+            # print("Deep copying")
+            # hidden_states = copy.deepcopy(outputs.hidden_states)
+
             # pre-process distribution
             next_token_scores = logits_processor(input_ids, next_token_logits)
 
@@ -3621,6 +3625,7 @@ class GenerationMixin(ContinuousMixin):
                         (outputs.decoder_hidden_states,)
                         if self.config.is_encoder_decoder
                         else (outputs.hidden_states,)
+                        # else (hidden_states,)
                     )
 
             # token selection
@@ -3635,8 +3640,11 @@ class GenerationMixin(ContinuousMixin):
             if has_eos_stopping_criteria:
                 next_tokens = next_tokens * unfinished_sequences + pad_token_id * (1 - unfinished_sequences)
 
+            # print(f"Original input_ids shape is {input_ids.shape}")
+            # print(f"Next token is {next_tokens}")
             # update generated ids, model inputs, and length for next step
             input_ids = torch.cat([input_ids, next_tokens[:, None]], dim=-1)
+            # print(f"After adding next token input_ids shape is {input_ids.shape}")
             if streamer is not None:
                 streamer.put(next_tokens.cpu())
 

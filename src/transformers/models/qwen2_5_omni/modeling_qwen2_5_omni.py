@@ -2994,6 +2994,8 @@ class Qwen2_5OmniTalkerForConditionalGeneration(Qwen2_5OmniPreTrainedModelForCon
                 position_ids = position_ids.unsqueeze(0).expand(3, -1, -1)
 
         if inputs_embeds is None:
+            print("Input embeds is None")
+            # print(f"Thinker reply part shape is {thinker_reply_part.shape}")
             # 1. Inference tokens after second token
             codec_embeds = self.get_input_embeddings()(input_ids)
             inputs_embeds = codec_embeds + thinker_reply_part[:, :1, :]
@@ -3020,6 +3022,8 @@ class Qwen2_5OmniTalkerForConditionalGeneration(Qwen2_5OmniPreTrainedModelForCon
         )
 
         hidden_states = outputs[0]
+        # print(f"Last hidden state is  {hidden_states}")
+        print(f"Last hidden state shape is  {hidden_states.shape}")
         logits = self.codec_head(hidden_states)
         logits = logits.float()
 
@@ -4521,6 +4525,7 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
 
         # 2. Generate speech tokens from talker module
         embeds_to_talker = thinker_result.hidden_states[0][0].clone().to(self.talker.device)
+        print(f"embeds to talker shape is {embeds_to_talker.shape}")
         if thinker_kwargs.get("input_features", None) is not None:
             audio_ids_mask = input_ids == self.config.thinker_config.audio_token_index
             audio_mask = audio_ids_mask.unsqueeze(-1).expand_as(embeds_to_talker).to(embeds_to_talker.device)
@@ -4556,9 +4561,13 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
         thinker_token_embeds = [
             token_hidden_states[0].to(self.talker.device) for token_hidden_states in processed_thinker_hidden
         ]
+        print(f"thinker token embeds 0th index shape is {thinker_token_embeds[0].shape}")
+        print(f"thinker token embeds 1st index shape is {thinker_token_embeds[1].shape}")
         thinker_hidden_states = [
             token_hidden_states[-1].to(self.talker.device) for token_hidden_states in processed_thinker_hidden
         ]
+        print(f"thinker hidden states 0th index shape is {thinker_hidden_states[0].shape}")
+        print(f"thinker hidden states 1st index shape is {thinker_hidden_states[1].shape}")
 
         talker_text_bos_token = speaker_params["bos_token"]
         talker_input_text_ids = torch.cat(
@@ -4592,6 +4601,7 @@ class Qwen2_5OmniForConditionalGeneration(Qwen2_5OmniPreTrainedModel, Generation
             ],
             dim=1,
         )
+        print(f"Shape of talker input embeds is {talker_inputs_embeds.shape}")
 
         eos_embedding = thinker_embed_tokens(
             torch.tensor([[self.talker.text_eos_token]], dtype=torch.long, device=self.thinker.device)

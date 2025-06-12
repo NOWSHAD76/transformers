@@ -2382,6 +2382,10 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
         "Generate the caption in English: Glass is breaking."
         ```"""
 
+        print("Inside talker model")
+        print(f"Input is {inputs_embeds}")
+        print(f"Input shape is {inputs_embeds.shape}")
+
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
@@ -2389,6 +2393,7 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
 
         if attention_mask is not None and position_ids is None:
+            # print("Skipping position ID calcuation")
             if (
                 cache_position is None
                 or (cache_position is not None and cache_position[0] == 0)
@@ -2450,6 +2455,8 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
+        print(f"Output is {outputs}")
+        print(f"Output shape is {outputs[0].shape}")
 
         hidden_states = outputs[0]
         logits = self.codec_head(hidden_states)
@@ -4024,6 +4031,8 @@ class Gemma3WithTalkerToken2WavDiTModel(Gemma3WithTalkerPreTrainedModel):
         drop_code=False,
         apply_cfg=True,
     ):
+        # print("Inside DIT forward")
+        # print(f"Hidden state size received {hidden_states.shape}")
         batch_size = hidden_states.shape[0]
         if time_step.ndim == 0:
             time_step = time_step.repeat(batch_size)
@@ -4211,13 +4220,14 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
 
         self.has_talker = config.enable_audio_output
         self.speaker_map = {}
+        self.static_tokens_embed = {}
         # --- Initialize Projection Layers ---
         thinker_hidden_dim = config.thinker_config.text_config.hidden_size
         talker_expected_dim = config.talker_config.embedding_size
 
         self.projection_thinker_L0 = nn.Linear(thinker_hidden_dim, talker_expected_dim)
-        self.projection_thinker_LN = nn.Linear(thinker_hidden_dim, talker_expected_dim)
-        self.projection_thinker_vocab = nn.Linear(thinker_hidden_dim, talker_expected_dim)
+        # self.projection_thinker_LN = nn.Linear(thinker_hidden_dim, talker_expected_dim)
+        # self.projection_thinker_vocab = nn.Linear(thinker_hidden_dim, talker_expected_dim)
         logger.info(f"Initialized projection layers: L0, LN, Vocab from {thinker_hidden_dim} to {talker_expected_dim}")
 
         # Mark them for potential special initialization (though not strictly necessary with current _init_weights)
@@ -4240,6 +4250,12 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         for key, value in torch.load(path, weights_only=True).items():
             self.speaker_map[key] = value
         logger.info("Speaker {} loaded".format(list(self.speaker_map.keys())))
+
+    def load_static_embeds(self, path):
+        check_torch_load_is_safe()
+        for key, value in torch.load(path, weights_only=True).items():
+            self.static_tokens_embed[key] = value
+        logger.info("Static embeds {} loaded".format(list(self.static_tokens_embed.keys())))
 
     def disable_talker(self):
         if hasattr(self, "talker"):
@@ -4314,6 +4330,22 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         if spk_path is None:
             raise ValueError(f"""{pretrained_model_name_or_path}/{spk_path} not exists""")
         model.load_speakers(spk_path)
+
+        st_embd_path = cached_file(
+            pretrained_model_name_or_path,
+            "static_token_embeds.pt",
+            subfolder=kwargs.pop("subfolder", None),
+            cache_dir=kwargs.pop("cache_dir", None),
+            force_download=kwargs.pop("force_download", False),
+            proxies=kwargs.pop("proxies", None),
+            resume_download=kwargs.pop("resume_download", None),
+            local_files_only=kwargs.pop("local_files_only", False),
+            token=kwargs.pop("use_auth_token", None),
+            revision=kwargs.pop("revision", None),
+        )
+        if st_embd_path is None:
+            raise ValueError(f"""{pretrained_model_name_or_path}/{st_embd_path} not exists""")
+        model.load_static_embeds(st_embd_path)
 
         return model
 
@@ -4454,13 +4486,23 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             (embeds_to_talker,) + thinker_result.hidden_states[0][1:],
         ) + thinker_result.hidden_states[1:]
 
+        # thinker_token_embeds = [
+        #     self.projection_thinker_L0(token_hidden_states[0]).to(self.talker.device)
+        #     for token_hidden_states in processed_thinker_hidden
+        # ]
         thinker_token_embeds = [
-            self.projection_thinker_L0(token_hidden_states[0]).to(self.talker.device)
-            for token_hidden_states in processed_thinker_hidden
+            token_hidden_states[0].to(self.talker.device) for token_hidden_states in processed_thinker_hidden
         ]
+        # thinker_hidden_states = [
+        #     self.projection_thinker_LN(token_hidden_states[-1]).to(self.talker.device)
+        #     for token_hidden_states in processed_thinker_hidden
+        # ]
+        # thinker_hidden_states = [
+        #     self.projection_thinker_L0(token_hidden_states[-1]).to(self.talker.device)
+        #     for token_hidden_states in processed_thinker_hidden
+        # ]
         thinker_hidden_states = [
-            self.projection_thinker_LN(token_hidden_states[-1]).to(self.talker.device)
-            for token_hidden_states in processed_thinker_hidden
+            token_hidden_states[-1].to(self.talker.device) for token_hidden_states in processed_thinker_hidden
         ]
 
         # processed_thinker_hidden = (
@@ -4507,12 +4549,15 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             dim=1,
         )
 
-        thinker_embed_tokens = self.thinker.get_input_embeddings()
+        # thinker_embed_tokens = self.thinker.get_input_embeddings()
         thinker_reply_part = torch.cat(thinker_hidden_states[1:], dim=1) + torch.cat(thinker_token_embeds[1:], dim=1)
+        thinker_reply_part = self.projection_thinker_L0(thinker_reply_part)
         talker_inputs_embeds = thinker_hidden_states[0] + thinker_token_embeds[0]
-        talker_text_bos_token = torch.tensor([[talker_text_bos_token]], dtype=torch.long, device=self.thinker.device)
-        talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token).to(self.talker.device)
-        talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed).to(self.talker.device)
+        talker_inputs_embeds = self.projection_thinker_L0(talker_inputs_embeds)
+        # talker_text_bos_token = torch.tensor([[talker_text_bos_token]], dtype=torch.long, device=self.thinker.device)
+        # talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token).to(self.talker.device)
+        talker_text_bos_embed = self.static_tokens_embed[f"{speaker}_talker_text_bos_embed"].to(self.talker.device)
+        # talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed).to(self.talker.device)
         talker_inputs_embeds = torch.cat(
             [
                 talker_inputs_embeds,
@@ -4522,23 +4567,25 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             dim=1,
         )
 
-        eos_embedding = thinker_embed_tokens(
-            torch.tensor(
-                [[self.talker.text_eos_token]],
-                dtype=torch.long,
-                device=self.thinker.device,
-            )
-        ).to(self.talker.device)
-        eos_embedding = self.projection_thinker_vocab(eos_embedding).to(self.talker.device)
+        # eos_embedding = thinker_embed_tokens(
+        #     torch.tensor(
+        #         [[self.talker.text_eos_token]],
+        #         dtype=torch.long,
+        #         device=self.thinker.device,
+        #     )
+        # ).to(self.talker.device)
+        # eos_embedding = self.projection_thinker_vocab(eos_embedding).to(self.talker.device)
+        eos_embedding = self.static_tokens_embed["eos_embedding"].to(self.talker.device)
 
-        pad_embedding = thinker_embed_tokens(
-            torch.tensor(
-                [[self.talker.text_pad_token]],
-                dtype=torch.long,
-                device=self.thinker.device,
-            )
-        ).to(self.talker.device)
-        pad_embedding = self.projection_thinker_vocab(pad_embedding).to(self.talker.device)
+        # pad_embedding = thinker_embed_tokens(
+        #     torch.tensor(
+        #         [[self.talker.text_pad_token]],
+        #         dtype=torch.long,
+        #         device=self.thinker.device,
+        #     )
+        # ).to(self.talker.device)
+        # pad_embedding = self.projection_thinker_vocab(pad_embedding).to(self.talker.device)
+        pad_embedding = self.static_tokens_embed["pad_embedding"].to(self.talker.device)
 
         thinker_reply_part = torch.cat(
             [
@@ -4555,7 +4602,8 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
                 [kwargs["attention_mask"], kwargs["attention_mask"].new_ones((1, 2))],
                 dim=1,
             ).to(self.talker.device)
-
+        # print(f"Talker input ID shape : {talker_input_ids.shape}")
+        # print(f"Talker input embed shape : {talker_inputs_embeds.shape}")
         talker_result = self.talker.generate(
             input_ids=talker_input_ids,
             input_text_ids=talker_input_text_ids,
@@ -4566,6 +4614,8 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             **{k: (v.to(self.talker.device) if torch.is_tensor(v) else v) for k, v in talker_kwargs.items()},
         )
         talker_generate_codes = talker_result[:, talker_input_ids.shape[1] : -1]
+        # print(f"Talker result shape : {talker_result.shape}")
+        # print(f"Talker generated codes shape : {talker_generate_codes.shape}")
 
         # 3. Generate wavs from code
         if self.token2wav.dtype != torch.float:
@@ -4578,7 +4628,7 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             **token2wav_kwargs,
         )
 
-        return thinker_result.sequences, wav.float()
+        return thinker_result.sequences, wav.float(), talker_generate_codes
 
     def forward(
         self,
@@ -4602,6 +4652,7 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         talker_position_ids=None,
         talker_past_key_values=None,
         talker_label=None,
+        thinker_hidden_states_label=None,
         # thinker_reply_part: Optional[torch.FloatTensor] = None,
         # talker_inputs_embeds: Optional[torch.FloatTensor] = None,
         rope_deltas: Optional[torch.LongTensor] = None,
@@ -4674,11 +4725,15 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             # processed_thinker_hidden = (embeds_to_talker + thinker_hidden_states[0][1:],) + thinker_hidden_states[1:]
             processed_thinker_hidden = (embeds_to_talker,) + thinker_hidden_states[1:]
 
-            # Apply projections
-            thinker_token_embeds = self.projection_thinker_L0(processed_thinker_hidden[0])
-            thinker_hidden_states = self.projection_thinker_LN(processed_thinker_hidden[-1])
+            talker_inputs_embeds = processed_thinker_hidden[0] + processed_thinker_hidden[-1]
+            talker_inputs_embeds = self.projection_thinker_L0(talker_inputs_embeds)
 
-            talker_text_bos_token = speaker_parm_bos
+            # Apply projections
+            # thinker_token_embeds = self.projection_thinker_L0(processed_thinker_hidden[0])
+            # thinker_hidden_states = self.projection_thinker_LN(processed_thinker_hidden[-1])
+            # thinker_hidden_states = self.projection_thinker_L0(processed_thinker_hidden[-1])
+
+            # talker_text_bos_token = speaker_parm_bos
             # talker_input_ids = torch.cat(
             #     [
             #         torch.full_like(
@@ -4699,36 +4754,37 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             #     ],
             #     dim=1,
             # )
-            thinker_embed_tokens = self.thinker.get_input_embeddings()
-            talker_text_bos_token = torch.tensor(
-                [[talker_text_bos_token]], dtype=torch.long, device=self.talker.device
-            )
-            talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token).to(self.talker.device)
-            talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed).to(self.talker.device)
+            # thinker_embed_tokens = self.thinker.get_input_embeddings()
+            # talker_text_bos_token = torch.tensor(
+            #     [[talker_text_bos_token]], dtype=torch.long, device=self.talker.device
+            # )
+            # talker_text_bos_embed = thinker_embed_tokens(talker_text_bos_token).to(self.talker.device)
+            # talker_text_bos_embed = self.projection_thinker_vocab(talker_text_bos_embed).to(self.talker.device)
 
             # Prepare talker inputs
-            talker_inputs_embeds = thinker_hidden_states + thinker_token_embeds
+            # talker_inputs_embeds = thinker_hidden_states + thinker_token_embeds
 
-            if talker_label is not None:
+            if talker_label is not None and thinker_hidden_states_label is not None:
                 talker_embd = self.talker.get_input_embeddings()
                 talker_label = talker_label.to(self.talker.device)
                 label_embd = talker_embd(talker_label)
-                talker_inputs_embeds = torch.cat(
-                    [talker_inputs_embeds, talker_text_bos_embed],
-                    dim=1,
-                )
+                # talker_inputs_embeds = torch.cat(
+                #     [talker_inputs_embeds, talker_text_bos_embed],
+                #     dim=1,
+                # )
                 talker_inputs_embeds = torch.cat(
                     [talker_inputs_embeds, label_embd],
                     dim=1,
                 )
             else:
-                talker_inputs_embeds = torch.cat(
-                    [
-                        talker_inputs_embeds,
-                        talker_text_bos_embed,
-                    ],
-                    dim=1,
-                )
+                # talker_inputs_embeds = torch.cat(
+                #     [
+                #         talker_inputs_embeds,
+                #         talker_text_bos_embed,
+                #     ],
+                #     dim=1,
+                # )
+                pass
             # eos_embedding = thinker_embed_tokens(
             #     torch.tensor([[self.talker.text_eos_token]], dtype=torch.long, device=self.talker.device)
             # )

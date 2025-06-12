@@ -897,11 +897,13 @@ class Gemma3Model(Gemma3PreTrainedModel):
         if input_ids is not None and self.config.image_token_id >= self.vocab_size:
             special_image_mask = input_ids == self.config.image_token_id
             llm_input_ids = input_ids.clone()
+            # llm_input_ids = input_ids
             llm_input_ids[special_image_mask] = 0
         else:
             llm_input_ids = input_ids
 
         if inputs_embeds is None:
+            # llm_input_ids = input_ids.clone()
             inputs_embeds = self.get_input_embeddings()(llm_input_ids)
 
         if cache_position is None:
@@ -1090,7 +1092,6 @@ class Gemma3ForConditionalGeneration(Gemma3PreTrainedModel, GenerationMixin):
             output_hidden_states if output_hidden_states is not None else self.config.output_hidden_states
         )
         return_dict = return_dict if return_dict is not None else self.config.use_return_dict
-
         outputs = self.model(
             input_ids=input_ids,
             pixel_values=pixel_values,
