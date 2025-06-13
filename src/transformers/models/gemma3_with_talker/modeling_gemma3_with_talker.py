@@ -2382,9 +2382,9 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
         "Generate the caption in English: Glass is breaking."
         ```"""
 
-        print("Inside talker model")
-        print(f"Input is {inputs_embeds}")
-        print(f"Input shape is {inputs_embeds.shape}")
+        # print("Inside talker model")
+        # print(f"Input is {inputs_embeds}")
+        # print(f"Input shape is {inputs_embeds.shape}")
 
         output_attentions = output_attentions if output_attentions is not None else self.config.output_attentions
         output_hidden_states = (
@@ -2455,8 +2455,8 @@ class Gemma3WithTalkerTalkerForConditionalGeneration(
             output_hidden_states=output_hidden_states,
             return_dict=return_dict,
         )
-        print(f"Output is {outputs}")
-        print(f"Output shape is {outputs[0].shape}")
+        # print(f"Output is {outputs}")
+        # print(f"Output shape is {outputs[0].shape}")
 
         hidden_states = outputs[0]
         logits = self.codec_head(hidden_states)
@@ -4252,6 +4252,7 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         logger.info("Speaker {} loaded".format(list(self.speaker_map.keys())))
 
     def load_static_embeds(self, path):
+        print(f"Loading static embeds from {path}")
         check_torch_load_is_safe()
         for key, value in torch.load(path, weights_only=True).items():
             self.static_tokens_embed[key] = value
@@ -4652,7 +4653,8 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
         talker_position_ids=None,
         talker_past_key_values=None,
         talker_label=None,
-        thinker_hidden_states_label=None,
+        thinker_hidden_states_label_0=None,
+        thinker_hidden_states_label_oth=None,
         talker_text_bos_embed=None,
         # eos_embedding=None,
         # pad_embedding=None,
@@ -4767,50 +4769,59 @@ class Gemma3WithTalkerForConditionalGeneration(Gemma3WithTalkerPreTrainedModel, 
             # Prepare talker inputs
             # talker_inputs_embeds = thinker_hidden_states + thinker_token_embeds
 
-            if talker_label is not None and thinker_hidden_states_label is not None:
-                with torch.no_grad():
-                    # talker_label = talker_label[speaker]
-                    m = talker_label.size(1)
-                    n = 0
-                    while (
-                        f"embeds_{n}" in thinker_hidden_states_label
-                        and f"last_hd_layer_{n}" in thinker_hidden_states_label
-                    ):
-                        n += 1
-                    tokens = []
-                    for i in range(m):
-                        # print(f"Working on {i}")
-                        if i == 0:
-                            emb = thinker_hidden_states_label[f"embeds_{i}"]
-                            hd = thinker_hidden_states_label[f"last_hd_layer_{i}"]
-                            hidden_sum = emb + hd
-                            hidden_sum = hidden_sum.to(device=self.talker.device, dtype=self.talker.dtype)
-                            hidden_sum = self.projection_thinker_L0(hidden_sum)
-                            tokens.append(hidden_sum)
-                            tokens.append(talker_text_bos_embed)
-                        if i < n:
-                            emb = thinker_hidden_states_label[f"embeds_{i}"]
-                            hd = thinker_hidden_states_label[f"last_hd_layer_{i}"]
-                            hidden_sum = emb + hd
-                            hidden_sum = hidden_sum.to(device=self.talker.device, dtype=self.talker.dtype)
-                            hidden_sum = self.projection_thinker_L0(hidden_sum)
-                        elif i == n:
-                            hidden_sum = talker_inputs_embeds
-                        elif i == n + 1:
-                            hidden_sum = self.static_tokens_embed["eos_embedding"]
-                        else:
-                            hidden_sum = self.static_tokens_embed["pad_embedding"]
-
-                        # tokens.append(hidden_sum)
-                        talker_id = talker_label[0, i].item()  # .to(device=model.talker.device,dtype=model.dtype)
-                        talker_embd = self.talker.get_input_embeddings()(
-                            torch.tensor([talker_id], dtype=torch.long, device=self.talker.device)
+            if talker_label is not None and thinker_hidden_states_label_oth is not None:
+                thinker_hidden_states_label_oth = thinker_hidden_states_label_oth[0]
+                thinker_hidden_states_label_0 = thinker_hidden_states_label_0[0]
+                thinker_hidden_states_label_oth = thinker_hidden_states_label_oth.to(
+                    device=self.talker.device, dtype=self.talker.dtype
+                )
+                thinker_hidden_states_label_0 = thinker_hidden_states_label_0.to(
+                    device=self.talker.device, dtype=self.talker.dtype
+                )
+                # with torch.no_grad():
+                # talker_label = talker_label[speaker]
+                m = talker_label.size(1)
+                n = thinker_hidden_states_label_oth.shape[1] + 1
+                tokens = []
+                for i in range(m):
+                    # print(f"Working on {i}")
+                    if i == 0:
+                        emb = thinker_hidden_states_label_0[0].unsqueeze(0)
+                        hd = thinker_hidden_states_label_0[1].unsqueeze(0)
+                        hidden_sum = emb + hd
+                        hidden_sum = hidden_sum.to(device=self.talker.device, dtype=self.talker.dtype)
+                        hidden_sum = self.projection_thinker_L0(hidden_sum)
+                        tokens.append(hidden_sum)
+                        tokens.append(talker_text_bos_embed.unsqueeze(0))
+                    if i < n:
+                        layer = thinker_hidden_states_label_oth[:, i - 1, :].unsqueeze(1)
+                        emb = layer[0].unsqueeze(0)
+                        hd = layer[1].unsqueeze(0)
+                        hidden_sum = emb + hd
+                        hidden_sum = hidden_sum.to(device=self.talker.device, dtype=self.talker.dtype)
+                        hidden_sum = self.projection_thinker_L0(hidden_sum)
+                    elif i == n:
+                        # hidden_sum = talker_inputs_embeds
+                        hidden_sum = self.static_tokens_embed["eos_embedding"].to(
+                            device=self.talker.device, dtype=self.talker.dtype
                         )
-                        if i == 0:
-                            tokens.append(talker_embd.unsqueeze(0))
-                        else:
-                            input_embd = hidden_sum + talker_embd.unsqueeze(0)
-                            tokens.append(input_embd)
+                    # elif i == n + 1:
+                    #     hidden_sum = self.static_tokens_embed["eos_embedding"]
+                    else:
+                        hidden_sum = self.static_tokens_embed["pad_embedding"].to(
+                            device=self.talker.device, dtype=self.talker.dtype
+                        )
+
+                    # tokens.append(hidden_sum)
+                    talker_id = talker_label[0, i].item()  # .to(device=model.talker.device,dtype=model.dtype)
+                    talker_embd = self.talker.get_input_embeddings()(
+                        torch.tensor([talker_id], dtype=torch.long, device=self.talker.device)
+                    )
+                    if i == 0:
+                        tokens.append(talker_embd.unsqueeze(0))
+                    else:
+                        input_embd = hidden_sum + talker_embd.unsqueeze(0)
+                        tokens.append(input_embd)
                 inputs_embeds = torch.cat(tokens, dim=1)
             else:
                 # talker_inputs_embeds = torch.cat(
